@@ -1,0 +1,32 @@
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+import joblib
+
+BASE_SERVINGS = 2
+xls = pd.read_excel("recipe_data.xlsx", sheet_name=None, engine="openpyxl")
+
+data = []
+for sheet_name, df in xls.items():
+    for idx, row in df.iterrows():
+        for col in df.columns:
+            if "ingredient" in col.lower():
+                ingredients = str(row[col]).split("\n")
+                for line in ingredients:
+                    parts = line.split(" ")
+                    try:
+                        qty = float(eval(parts[0])) if parts[0].replace(".", "").replace("/", "").isdigit() else 1
+                        servings = BASE_SERVINGS
+                        data.append([qty, servings, qty])
+                    except:
+                        continue
+
+df_final = pd.DataFrame(data, columns=["original_qty", "servings", "adjusted_qty"])
+
+X = df_final[["original_qty", "servings"]]
+y = df_final["adjusted_qty"]
+
+model = RandomForestRegressor()
+model.fit(X, y)
+
+joblib.dump(model, "ingredient_scaler.pkl")
+print("✅ ingredient_scaler.pkl created successfully.")
