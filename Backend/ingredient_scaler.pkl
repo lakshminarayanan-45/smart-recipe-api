@@ -1,1 +1,38 @@
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+import joblib
+
+# Load your recipe Excel
+xls = pd.read_excel("recipe_data.xlsx", sheet_name=None, engine="openpyxl")
+
+data = []
+
+# Extract features: original quantity, servings → adjusted amount
+for sheet_name, df in xls.items():
+    for idx, row in df.iterrows():
+        for col in df.columns:
+            if "ingredient" in col.lower():
+                ingredients = str(row[col]).split("\n")
+                for line in ingredients:
+                    parts = line.split(" ")
+                    try:
+                        qty = float(eval(parts[0])) if parts[0].replace(".", "").replace("/", "").isdigit() else 1
+                        name = " ".join(parts[1:]).strip()
+                        servings = BASE_SERVINGS  # Set according to your default
+                        data.append([qty, servings, qty])  # For now original qty = adjusted qty
+                    except:
+                        continue
+
+df_final = pd.DataFrame(data, columns=["original_qty", "servings", "adjusted_qty"])
+
+X = df_final[["original_qty", "servings"]]
+y = df_final["adjusted_qty"]
+
+model = RandomForestRegressor()
+model.fit(X, y)
+
+# Save the model as ingredient_scaler.pkl
+joblib.dump(model, "ingredient_scaler.pkl")
+print("✅ ingredient_scaler.pkl created successfully.")
 
