@@ -4,7 +4,7 @@ from fractions import Fraction
 from flask import Flask, request, jsonify, abort, send_from_directory
 from flask_cors import CORS
 import pandas as pd
-import joblib  # ✅ Using joblib consistently
+import joblib  # Correct: using joblib instead of pickle
 
 # === Configuration ===
 API_KEY = os.getenv("API_KEY", "abc123securetoken")
@@ -17,6 +17,8 @@ try:
     xls = pd.read_excel(EXCEL_PATH, sheet_name=None, engine="openpyxl")
 except FileNotFoundError:
     raise RuntimeError(f"❌ Excel file not found: {EXCEL_PATH}")
+except Exception as e:
+    raise RuntimeError(f"❌ Error loading Excel: {e}")
 
 # === Load ML Model using joblib ===
 try:
@@ -46,7 +48,7 @@ def format_time(minutes):
     try:
         m = int(round(float(minutes)))
         hrs, mins = divmod(m, 60)
-        return (f"{hrs} hr{'s' if hrs > 1 else ''} " if hrs else "") + (f"{mins} min{'s' if mins > 1 else ''}" if mins else "")
+        return (f"{hrs} hr{'s' if hrs != 1 else ''} " if hrs else "") + (f"{mins} min{'s' if mins != 1 else ''}" if mins else "")
     except Exception:
         return str(minutes)
 
