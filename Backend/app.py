@@ -1,9 +1,10 @@
-import os, re
+import os
+import re
 from fractions import Fraction
 from flask import Flask, request, jsonify, abort, send_from_directory
 from flask_cors import CORS
 import pandas as pd
-import joblib  # Use joblib, not pickle!
+import joblib  # ✅ Using joblib consistently
 
 # === Configuration ===
 API_KEY = os.getenv("API_KEY", "abc123securetoken")
@@ -17,7 +18,7 @@ try:
 except FileNotFoundError:
     raise RuntimeError(f"❌ Excel file not found: {EXCEL_PATH}")
 
-# === Load ML Model ===
+# === Load ML Model using joblib ===
 try:
     scaler_model = joblib.load(MODEL_PATH)
 except FileNotFoundError:
@@ -46,7 +47,7 @@ def format_time(minutes):
         m = int(round(float(minutes)))
         hrs, mins = divmod(m, 60)
         return (f"{hrs} hr{'s' if hrs > 1 else ''} " if hrs else "") + (f"{mins} min{'s' if mins > 1 else ''}" if mins else "")
-    except:
+    except Exception:
         return str(minutes)
 
 def detect_row(recipe_name):
@@ -78,7 +79,7 @@ def parse_ingredients(raw):
         if match:
             try:
                 qty = eval(match.group("qty")) if match.group("qty") else 1
-            except:
+            except Exception:
                 qty = 1
             result.append({
                 "amount": qty,
