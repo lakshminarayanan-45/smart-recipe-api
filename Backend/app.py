@@ -3,7 +3,7 @@ from fractions import Fraction
 from flask import Flask, request, jsonify, abort, send_from_directory
 from flask_cors import CORS
 import pandas as pd
-import pickle
+import joblib  # Use joblib, not pickle!
 
 # === Configuration ===
 API_KEY = os.getenv("API_KEY", "abc123securetoken")
@@ -19,10 +19,11 @@ except FileNotFoundError:
 
 # === Load ML Model ===
 try:
-    with open(MODEL_PATH, "rb") as f:
-        scaler_model = pickle.load(f)
+    scaler_model = joblib.load(MODEL_PATH)
 except FileNotFoundError:
     raise RuntimeError(f"❌ ML model file not found: {MODEL_PATH}")
+except Exception as e:
+    raise RuntimeError(f"❌ Error loading ML model: {str(e)}")
 
 LANGUAGE_SUFFIX = {
     "TamilName": "ta", "tamilname": "ta", "hindiName": "hn", "malayalamName": "kl",
@@ -70,7 +71,6 @@ def parse_ingredients(raw):
         line = line.strip()
         if not line:
             continue
-
         m1 = re.match(r"(?P<qty>[\d\./]+)?\s*(?P<unit>\w+)?\s+(?P<name>[a-zA-Z].+)", line)
         m2 = re.match(r"(?P<name>.+?)\s*[-:]\s*(?P<qty>[\d\./]+)?\s*(?P<unit>\w+)?", line)
 
@@ -89,13 +89,9 @@ def parse_ingredients(raw):
     return result
 
 def scale_ingredient_ml(item, servings):
-    name = item["name"].lower()
     qty = item["amount"]
-
-    # Prepare features: [original_quantity, servings]
     features = [[qty, servings]]
     scaled = scaler_model.predict(features)[0]
-
     return {
         **item,
         "amount": round(scaled, 2),
@@ -154,4 +150,3 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
