@@ -1,0 +1,27 @@
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import joblib
+import numpy as np
+
+# Example training data: [qty, servings] → scaled_qty  
+# This assumes qty scales linearly with servings
+X = [
+    [1, 2],
+    [2, 2],
+    [1, 4],
+    [2, 4],
+    [5, 2],
+    [5, 4],
+]
+y = [
+    1, 2, 2, 4, 5, 10  # Simply qty * (servings / BASE_SERVINGS) — in this case BASE_SERVINGS = 2
+]
+
+# Train model
+model = LinearRegression()
+model.fit(X, y)
+
+# Save model
+joblib.dump(model, "ingredient_scaler.pkl")
+
+print("✅ ingredient_scaler.pkl created successfully.")
