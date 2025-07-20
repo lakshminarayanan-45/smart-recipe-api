@@ -2,25 +2,24 @@ import joblib
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
-# === Training Data ===
-# Assume simple linear data: original qty = 1 at 2 servings ➡ scale linearly
+# === Dummy Training Data ===
 X = []
 y = []
 
-# Generate dummy data (e.g., 1–5 units at servings from 1 to 10)
-for qty in range(1, 6):  # original quantity
-    for servings in range(1, 11):  # servings from 1 to 10
+# Generate synthetic data: quantities 1–5, servings 1–10
+for qty in range(1, 6):
+    for servings in range(1, 11):
         X.append([qty, servings])
-        # Assuming linear scale based on servings
-        y.append(qty * servings / 2)
+        # Rule: scaled_qty = (original_qty * new_servings / base_servings)
+        y.append(qty * servings / 2)  # since base_servings = 2
 
 X = np.array(X)
 y = np.array(y)
 
-# === Train Model ===
+# === Train Simple Linear Regression Model ===
 model = LinearRegression()
 model.fit(X, y)
 
-# === Export Model ===
+# === Save Model ===
 joblib.dump(model, "ingredient_scaler.pkl")
 print("✅ Model trained and saved as ingredient_scaler.pkl")
