@@ -39,10 +39,24 @@ app = Flask(__name__, static_folder="static")
 CORS(app)
 
 # === Helpers ===
-def to_mixed_fraction(val: float, precision=1/8) -> str:
-    frac = Fraction(val).limit_denominator(int(1 / precision))
-    whole, remainder = divmod(frac.numerator, frac.denominator)
-    return f"{whole} and {Fraction(remainder, frac.denominator)}" if remainder else str(whole)
+def to_mixed_fraction(val: float) -> str:
+    allowed_fractions = {
+        Fraction(1, 4): "1/4",
+        Fraction(1, 2): "1/2",
+        Fraction(3, 4): "3/4"
+    }
+
+    frac = Fraction(val).limit_denominator(4)  # Limits to 1/4 accuracy
+    whole = frac.numerator // frac.denominator
+    remainder = frac - whole
+
+    if remainder in allowed_fractions:
+        if whole == 0:
+            return allowed_fractions[remainder]
+        else:
+            return f"{whole} and {allowed_fractions[remainder]}"
+    else:
+        return str(whole) if remainder == 0 else f"{round(float(val), 2)}"
 
 def format_time(minutes):
     try:
