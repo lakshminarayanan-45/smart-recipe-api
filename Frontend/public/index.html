@@ -41,11 +41,17 @@
   <input id="recipeName" placeholder="Enter Recipe Name" />
   
   <select id="language">
-    <option value="en">English</option>
-    <option value="ta">Tamil</option>
-    <option value="hi">Hindi</option>
-    <!-- Add more language codes as needed -->
-  </select>
+  <option value="en">English</option>
+  <option value="ta">Tamil</option>
+  <option value="hi">Hindi</option>
+  <option value="te">Telugu</option>
+  <option value="kn">Kannada</option>
+  <option value="ml">Malayalam</option>
+  <option value="mr">Marathi</option>
+  <option value="bn">Bengali</option>
+  <option value="gu">Gujarati</option>
+</select>
+
 
   <input id="servings" type="number" placeholder="No. of Servings" />
   <button onclick="adjustRecipe()">Adjust Recipe</button>
@@ -78,8 +84,7 @@
       }
 
       const fullRecipeName = `${lang}:${recipe}`;
-
-      const url = "https://smart-recipe-api-ff12.onrender.com"; // ✅ updated backend endpoint
+      const url = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
 
       try {
         const res = await fetch(url, {
@@ -87,26 +92,39 @@
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ recipe_name: fullRecipeName, new_servings: servings })
+          body: JSON.stringify({
+            recipe_name: fullRecipeName,
+            new_servings: servings
+          })
         });
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Unknown error");
 
+        // Display results
         responseBox.style.display = "block";
         document.getElementById("recipeTitle").innerText = `${data.recipe} (for ${data.new_servings} servings)`;
         document.getElementById("timeInfo").innerText = `${data.original_time} ➡ ${data.adjusted_time}`;
 
+        // Ingredients
         const ing = document.getElementById("ingredients");
         ing.innerHTML = "";
-        data.scaled_ingredients.forEach(i => {
-          ing.innerHTML += `<div class="ingredient">- ${i.formattedAmount} ${i.unit} ${i.name}</div>`;
+        data.adjusted_ingredients.forEach(ingredient => {
+          ing.innerHTML += `<div class="ingredient">- ${ingredient}</div>`;
         });
 
+        // Instructions
         const steps = document.getElementById("steps");
         steps.innerHTML = "";
-        data.adjusted_instructions.forEach((s, idx) => {
-          steps.innerHTML += `<div class="step">${idx + 1}. ${s}</div>`;
+
+        const instructions = Array.isArray(data.adjusted_instructions)
+          ? data.adjusted_instructions
+          : data.adjusted_instructions.split(/\.\s*/);
+
+        instructions.forEach((s, idx) => {
+          if (s.trim()) {
+            steps.innerHTML += `<div class="step">${idx + 1}. ${s.trim()}</div>`;
+          }
         });
 
       } catch (err) {
