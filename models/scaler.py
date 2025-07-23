@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from models.translator import detect_and_translate
 from models.rewriter import rewrite_instruction
-from models.parser import parse_amount
+from models.parser import extract_amount_and_unit  # ✅ updated import
 
 # Path to main recipe file
 DATA_PATH = os.path.join(os.path.dirname(__file__), '../data/recipe_data.xlsx')
@@ -43,7 +43,7 @@ def process_recipe_request(recipe_name: str, new_servings: int):
         unit = row.get('unit', '')
         raw_amt = row.get('amount', '')
 
-        parsed_amt = parse_amount(str(raw_amt))
+        parsed_amt, _ = extract_amount_and_unit(str(raw_amt))  # ✅ updated function
         scaled_amt = parsed_amt * new_servings / original_servings
 
         # Translate to English using translation DataFrame if language is not English
