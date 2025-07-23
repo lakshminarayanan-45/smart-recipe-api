@@ -15,6 +15,16 @@ def parse_fraction(value):
 def normalize(text):
     text = text.lower().strip()
     text = re.sub(r'[\u200b\n\r\t]', ' ', text)
+
+    # Replace common Unicode fractions with ASCII equivalents
+    unicode_fractions = {
+        '¼': '1/4', '½': '1/2', '¾': '3/4',
+        '⅓': '1/3', '⅔': '2/3',
+        '⅛': '1/8', '⅜': '3/8', '⅝': '5/8', '⅞': '7/8'
+    }
+    for k, v in unicode_fractions.items():
+        text = text.replace(k, v)
+
     return text
 
 # Identify if a line is an ingredient line based on simple rules
@@ -49,4 +59,3 @@ def parse_ingredient_line(line):
         "unit": unit,
         "ingredient": ingredient.strip()
     }
-
