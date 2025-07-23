@@ -1,7 +1,8 @@
-import spacy
+# translator.py
+from langdetect import detect
 
-# Dummy language detection from recipe name prefix or you can expand this
-lang_code_map = {
+# List of supported language codes and their labels
+LANG_CODE_MAP = {
     "ta": "Tamil",
     "hi": "Hindi",
     "en": "English",
@@ -13,18 +14,29 @@ lang_code_map = {
     "mr": "Marathi"
 }
 
-def detect_language(recipe_name):
-    # Simple heuristic: check prefix or use langdetect/spacy
-    if recipe_name.startswith("ta:"):
-        return "Tamil"
-    elif recipe_name.startswith("hi:"):
-        return "Hindi"
-    return "English"
+def detect_and_translate(text: str, detect_only=False, target_lang='en'):
+    """
+    Detects the language of the input text.
+    If detect_only=True, returns only the detected language code.
+    If detect_only=False, translates to target_lang (default: English).
+    """
+    if not text or not isinstance(text, str):
+        return "en" if detect_only else text
 
-# Stub: Replace with actual translation if needed
-def translate_to_english(text, lang):
-    return text  # Assumes data is already in English or no translation needed
+    try:
+        detected_lang = detect(text)
+    except Exception:
+        detected_lang = "en"
 
-def normalize_header(text):
-    return text.lower().strip().replace(" ", "_").replace("__", "_")
+    if detect_only:
+        return detected_lang.lower()
 
+    # Stub for future translation logic (e.g., Google Translate)
+    return text  # assuming pre-translated or multilingual column already exists
+
+
+def normalize_column(col_name: str):
+    """
+    Normalize Excel column names by stripping and converting to lowercase
+    """
+    return col_name.lower().strip().replace(" ", "_").replace("__", "_")
