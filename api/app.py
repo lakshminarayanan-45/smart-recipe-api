@@ -13,6 +13,10 @@ except Exception as e:
     print(f"❌ Failed to load translation file: {e}")
     ingredient_translations = None  # Fail-safe in case file is missing
 
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "Smart Recipe API is running 🚀"})
+
 @app.route("/scale_recipe", methods=["POST"])
 def scale_recipe():
     data = request.get_json()
