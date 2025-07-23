@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: smart-recipe-api
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.8
+    autoDeploy: true
