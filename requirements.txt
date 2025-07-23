@@ -9,3 +9,5 @@ nltk==3.8.1
 numpy==1.26.4
 langdetect==1.0.9
 gunicorn==21.2.0
+word2number==1.1
+
