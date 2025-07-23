@@ -6,7 +6,7 @@ from models.scaler import process_recipe_request
 app = Flask(__name__)
 
 # Load translation dataset once at startup
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "ingredient_translations.xlsx")
+DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "ingredients_translation.xlsx")
 try:
     ingredient_translations = pd.read_excel(DATA_PATH)
 except Exception as e:
@@ -34,7 +34,3 @@ def scale_recipe():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))  # Render assigns dynamic port
-    app.run(host="0.0.0.0", port=port)
