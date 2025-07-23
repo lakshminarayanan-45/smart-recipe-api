@@ -5,10 +5,10 @@ from models.rewriter import rewrite_instruction
 from models.parser import parse_amount
 
 # Path to main recipe file
-DATA_PATH = os.path.join(os.path.dirname(__file__), '../data/recipes.xlsx')
+DATA_PATH = os.path.join(os.path.dirname(__file__), '../data/recipe_data.xlsx')
 
 # Path to ingredient translation file (ensure this exists)
-TRANSLATION_PATH = os.path.join(os.path.dirname(__file__), '../data/ingredient_translation.xlsx')
+TRANSLATION_PATH = os.path.join(os.path.dirname(__file__), '../data/ingredients_translation.xlsx')
 
 
 def process_recipe_request(recipe_name: str, new_servings: int):
