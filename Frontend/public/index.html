@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Recipe Adjuster</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #fffaf0;
+      padding: 2rem;
+      max-width: 800px;
+      margin: auto;
+    }
+    h1, h2 {
+      color: #4b0082;
+    }
+    input, button {
+      padding: 0.5rem;
+      margin: 0.5rem 0;
+      font-size: 1rem;
+      width: 100%;
+    }
+    .response {
+      margin-top: 2rem;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+    }
+    .ingredient, .step {
+      margin-bottom: 0.3rem;
+    }
+    .section {
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>🥘 Recipe Adjuster</h1>
+
+  <input id="recipeName" placeholder="Enter Recipe Name" />
+  <input id="servings" type="number" placeholder="No. of Servings" />
+  <button onclick="adjustRecipe()">Adjust Recipe</button>
+
+  <div class="response" id="responseBox" style="display:none">
+    <h2 id="recipeTitle"></h2>
+    <p><strong>Cooking Time:</strong> <span id="timeInfo"></span></p>
+
+    <div class="section">
+      <h3>🧾 Adjusted Ingredients:</h3>
+      <div id="ingredients"></div>
+    </div>
+
+    <div class="section">
+      <h3>📜 Updated Instructions:</h3>
+      <div id="steps"></div>
+    </div>
+  </div>
+
+  <script>
+    async function adjustRecipe() {
+      const recipe = document.getElementById("recipeName").value.trim();
+      const servings = document.getElementById("servings").value.trim();
+      const responseBox = document.getElementById("responseBox");
+
+      if (!recipe || !servings) {
+        alert("Please enter both recipe name and number of servings.");
+        return;
+      }
+
+      const url = "https://recipe-ai-intj.onrender.com/adjust_ingredients"; // <-- your backend
+
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer abc123securetoken"
+          },
+          body: JSON.stringify({ recipe_name: recipe, servings: servings })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unknown error");
+
+        responseBox.style.display = "block";
+        document.getElementById("recipeTitle").innerText = `${data.recipe} (for ${data.new_servings} servings)`;
+        document.getElementById("timeInfo").innerText = `${data.original_time} ➡ ${data.adjusted_time}`;
+
+        const ing = document.getElementById("ingredients");
+        ing.innerHTML = "";
+        data.ingredients.forEach(i => {
+          ing.innerHTML += `<div class="ingredient">- ${i.formattedAmount} ${i.unit} ${i.name}</div>`;
+        });
+
+        const steps = document.getElementById("steps");
+        steps.innerHTML = "";
+        data.rewritten_steps.forEach((s, idx) => {
+          steps.innerHTML += `<div class="step">${idx + 1}. ${s}</div>`;
+        });
+
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
