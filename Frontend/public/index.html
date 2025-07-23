@@ -15,7 +15,7 @@
     h1, h2 {
       color: #4b0082;
     }
-    input, button {
+    input, button, select {
       padding: 0.5rem;
       margin: 0.5rem 0;
       font-size: 1rem;
@@ -39,6 +39,14 @@
   <h1>🥘 Recipe Adjuster</h1>
 
   <input id="recipeName" placeholder="Enter Recipe Name" />
+  
+  <select id="language">
+    <option value="en">English</option>
+    <option value="ta">Tamil</option>
+    <option value="hi">Hindi</option>
+    <!-- Add more language codes as needed -->
+  </select>
+
   <input id="servings" type="number" placeholder="No. of Servings" />
   <button onclick="adjustRecipe()">Adjust Recipe</button>
 
@@ -61,6 +69,7 @@
     async function adjustRecipe() {
       const recipe = document.getElementById("recipeName").value.trim();
       const servings = document.getElementById("servings").value.trim();
+      const lang = document.getElementById("language").value;
       const responseBox = document.getElementById("responseBox");
 
       if (!recipe || !servings) {
@@ -68,16 +77,17 @@
         return;
       }
 
-      const url = "https://recipe-ai-intj.onrender.com/adjust_ingredients"; // <-- your backend
+      const fullRecipeName = `${lang}:${recipe}`;
+
+      const url = "https://recipe-ai-intj.onrender.com/scale_recipe"; // ✅ updated backend endpoint
 
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer abc123securetoken"
+            "Content-Type": "application/json"
           },
-          body: JSON.stringify({ recipe_name: recipe, servings: servings })
+          body: JSON.stringify({ recipe_name: fullRecipeName, new_servings: servings })
         });
 
         const data = await res.json();
@@ -89,13 +99,13 @@
 
         const ing = document.getElementById("ingredients");
         ing.innerHTML = "";
-        data.ingredients.forEach(i => {
+        data.scaled_ingredients.forEach(i => {
           ing.innerHTML += `<div class="ingredient">- ${i.formattedAmount} ${i.unit} ${i.name}</div>`;
         });
 
         const steps = document.getElementById("steps");
         steps.innerHTML = "";
-        data.rewritten_steps.forEach((s, idx) => {
+        data.adjusted_instructions.forEach((s, idx) => {
           steps.innerHTML += `<div class="step">${idx + 1}. ${s}</div>`;
         });
 
