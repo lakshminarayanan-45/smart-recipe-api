@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from scaler import process_recipe_request
+from models.scaler import process_recipe_request
 
 app = Flask(__name__)
 
