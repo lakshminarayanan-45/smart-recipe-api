@@ -5,15 +5,17 @@ from models.scaler import process_recipe_request
 
 app = Flask(__name__)
 
-# Cache translation dataset once at startup
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+# Compute absolute path two levels up to reach Backend/data/
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Backend/
+DATA_DIR = os.path.join(BASE_DIR, "data")
 TRANSLATION_FILE = os.path.join(DATA_DIR, "ingredients_translation.xlsx")
 
 try:
+    print(f"Loading translation file from: {TRANSLATION_FILE}")
     ingredient_translations = pd.read_excel(TRANSLATION_FILE)
 except Exception as e:
     print(f"❌ Failed to load translation file: {e}")
-    ingredient_translations = None  # Fail-safe
+    ingredient_translations = None  # Fail-safe in case file is missing
 
 @app.route("/", methods=["GET"])
 def home():
@@ -40,4 +42,3 @@ def scale_recipe():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
