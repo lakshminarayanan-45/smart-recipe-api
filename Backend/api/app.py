@@ -1,14 +1,18 @@
 from flask import Flask, request, jsonify
 import pandas as pd
 import os
-from models.scaler import process_recipe_request
+import sys
 from flask_cors import CORS  # Enable CORS
 
-app = Flask(__name__)
-CORS(app)  # This enables cross-origin requests for your API
+# Add the models folder (which is sibling to api/) to Python path for imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models')))
+from scaler import process_recipe_request
 
-# Compute absolute path two levels up from app.py to Backend folder, then into data
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # points to Backend/
+app = Flask(__name__)
+CORS(app)  # Allow cross-origin frontend calls
+
+# Compute absolute path to Backend/data/ directory, one level up from api/
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Backend/
 DATA_DIR = os.path.join(BASE_DIR, "data")
 TRANSLATION_FILE = os.path.join(DATA_DIR, "ingredients_translation.xlsx")
 
@@ -17,7 +21,7 @@ try:
     ingredient_translations = pd.read_excel(TRANSLATION_FILE)
 except Exception as e:
     print(f"❌ Failed to load translation file: {e}")
-    ingredient_translations = None  # Prevent crash if missing
+    ingredient_translations = None  # Fail-safe if missing
 
 @app.route("/", methods=["GET"])
 def home():
@@ -39,7 +43,6 @@ def scale_recipe():
         result = process_recipe_request(name, int(new_servings), ingredient_translations)
         return jsonify(result)
     except Exception as e:
-        # Log the error if needed
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
