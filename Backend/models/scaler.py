@@ -4,8 +4,8 @@ from models.translator import detect_and_translate
 from models.rewriter import rewrite_instruction
 from models.parser import extract_amount_and_unit
 
-# Compute base directory: two levels up from this file (scaler.py inside Backend/api/models)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Compute base directory: one level up from models/ is Backend/
+BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
 
 def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
