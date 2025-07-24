@@ -9,8 +9,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
 
 def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
-    # Load Excel recipe data
-    xls = pd.ExcelFile(DATA_PATH)
+    # Load Excel recipe data explicitly specifying openpyxl engine
+    xls = pd.ExcelFile(DATA_PATH, engine='openpyxl')
     recipes_df = xls.parse("recipes")
     ingredients_df = xls.parse("ingredients")
     instructions_df = xls.parse("instructions")
