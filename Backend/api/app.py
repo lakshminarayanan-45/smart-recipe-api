@@ -2,8 +2,10 @@ from flask import Flask, request, jsonify
 import pandas as pd
 import os
 from models.scaler import process_recipe_request
+from flask_cors import CORS  # Add this import
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS
 
 # Compute absolute path two levels up to reach Backend/data/
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Backend/
@@ -15,7 +17,7 @@ try:
     ingredient_translations = pd.read_excel(TRANSLATION_FILE)
 except Exception as e:
     print(f"❌ Failed to load translation file: {e}")
-    ingredient_translations = None  # Fail-safe in case file is missing
+    ingredient_translations = None  # Fail-safe
 
 @app.route("/", methods=["GET"])
 def home():
