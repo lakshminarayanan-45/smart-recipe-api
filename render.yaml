@@ -3,8 +3,11 @@ services:
     name: smart-recipe-api
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn api.app:app
+    buildCommand: |
+      cd api
+      pip install -r requirements.txt
+      python -m spacy download en_core_web_sm
+    startCommand: gunicorn app:app
     envVars:
       - key: FLASK_ENV
         value: production
