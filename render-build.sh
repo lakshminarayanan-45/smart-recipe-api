@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
+
+set -e  # Exit immediately if a command exits with a non-zero status
+
+echo "Installing Python dependencies..."
 pip install -r requirements.txt
+
+echo "Downloading spaCy English model..."
 python -m spacy download en_core_web_sm
 
-# Build Vite frontend
-cd Frontend
-npm install
-npm run build
-
-# Move built files
-cd ..
-mkdir -p templates static
-cp dist/index.html templates/
-cp -r dist/assets static/
+echo "Build completed successfully."
