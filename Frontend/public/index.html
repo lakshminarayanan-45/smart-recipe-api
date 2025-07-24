@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smart Recipe Adjuster</title>
   <style>
     body {
@@ -21,18 +21,21 @@
       padding: 1rem;
       border: 1px solid #ccc;
       background: #f9f9f9;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: left;
     }
     .ingredient, .step {
       margin-bottom: 0.3rem;
-      text-align: left;
     }
   </style>
 </head>
 <body>
   <h1>🍲 Smart Recipe Adjuster</h1>
-  <input id="recipeName" placeholder="Enter Recipe Name"/>
-  <input id="servings" type="number" placeholder="No. of Servings"/>
-  <button onclick="adjustRecipe()">Adjust Recipe</button>
+  <input id="recipeName" placeholder="Enter Recipe Name" />
+  <input id="servings" type="number" min="1" placeholder="Number of Servings" />
+  <button id="adjustBtn">Adjust Recipe</button>
 
   <div class="response" id="responseBox" style="display:none">
     <h3 id="recipeTitle"></h3>
@@ -44,16 +47,19 @@
   </div>
 
   <script>
-    async function adjustRecipe() {
+    const adjustBtn = document.getElementById("adjustBtn");
+    const responseBox = document.getElementById("responseBox");
+
+    adjustBtn.addEventListener("click", async () => {
       const recipe = document.getElementById("recipeName").value.trim();
       const servings = document.getElementById("servings").value.trim();
-      const responseBox = document.getElementById("responseBox");
 
       if (!recipe || !servings) {
         alert("Please enter both recipe name and number of servings.");
         return;
       }
 
+      // Replace this URL with your actual deployed backend URL
       const url = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
 
       try {
@@ -62,35 +68,41 @@
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ recipe_name: recipe, servings: servings })
+          body: JSON.stringify({
+            recipe_name: recipe,
+            new_servings: parseInt(servings, 10)
+          })
         });
 
         const data = await res.json();
+
         if (!res.ok) throw new Error(data.error || "Unknown error");
 
-        // Display output
+        // Show response box
         responseBox.style.display = "block";
+
         document.getElementById("recipeTitle").innerText = `${data.recipe} (for ${data.new_servings} servings)`;
         document.getElementById("timeInfo").innerText = `${data.original_time} ➡ ${data.adjusted_time}`;
 
         // Ingredients
-        const ing = document.getElementById("ingredients");
-        ing.innerHTML = "";
+        const ingredientsDiv = document.getElementById("ingredients");
+        ingredientsDiv.innerHTML = "";
         data.ingredients.forEach(i => {
-          ing.innerHTML += `<div class="ingredient">- ${i.formattedAmount} ${i.unit} ${i.name}</div>`;
+          ingredientsDiv.innerHTML += `<div class="ingredient">- ${i.formattedAmount} ${i.unit} ${i.name}</div>`;
         });
 
-        // Preparation Steps
-        const steps = document.getElementById("steps");
-        steps.innerHTML = "";
-        data.steps.forEach((s, index) => {
-          steps.innerHTML += `<div class="step">${index + 1}. ${s}</div>`;
+        // Steps
+        const stepsDiv = document.getElementById("steps");
+        stepsDiv.innerHTML = "";
+        data.steps.forEach((step, idx) => {
+          stepsDiv.innerHTML += `<div class="step">${idx + 1}. ${step}</div>`;
         });
 
-      } catch (err) {
-        alert("❌ " + err.message);
+      } catch (error) {
+        alert("❌ " + error.message);
+        responseBox.style.display = "none";
       }
-    }
+    });
   </script>
 </body>
 </html>
