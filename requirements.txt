@@ -1,13 +1,9 @@
 Flask==2.3.2
+flask-cors==4.0.0     # Optional, for frontend/backend cross-origin requests
 pandas==2.1.4
 openpyxl==3.1.2
 spacy==3.7.2
-googletrans==4.0.0rc1
-joblib==1.3.2
-scikit-learn==1.3.2
-nltk==3.8.1
-numpy==1.26.4
 langdetect==1.0.9
 gunicorn==21.2.0
 word2number==1.1
-
+numpy==1.26.4
