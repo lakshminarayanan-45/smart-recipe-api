@@ -18,7 +18,8 @@ TRANSLATION_FILE = os.path.join(DATA_DIR, "ingredients_translation.xlsx")
 
 try:
     print(f"Loading translation file from: {TRANSLATION_FILE}")
-    ingredient_translations = pd.read_excel(TRANSLATION_FILE)
+    # Explicitly specify engine='openpyxl' to avoid Excel format errors
+    ingredient_translations = pd.read_excel(TRANSLATION_FILE, engine='openpyxl')
 except Exception as e:
     print(f"❌ Failed to load translation file: {e}")
     ingredient_translations = None  # Fail-safe if missing
@@ -43,6 +44,8 @@ def scale_recipe():
         result = process_recipe_request(name, int(new_servings), ingredient_translations)
         return jsonify(result)
     except Exception as e:
+        # Log error to console for debugging
+        print(f"Error in processing request: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
