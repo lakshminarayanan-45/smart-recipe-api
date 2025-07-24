@@ -2,24 +2,16 @@ import os
 import pandas as pd
 from models.translator import detect_and_translate
 from models.rewriter import rewrite_instruction
-from models.parser import extract_amount_and_unit  # ✅ updated import
+from models.parser import extract_amount_and_unit
 
-# Path to main recipe file
 DATA_PATH = os.path.join(os.path.dirname(__file__), '../data/recipe_data.xlsx')
 
-# Path to ingredient translation file (ensure this exists)
-TRANSLATION_PATH = os.path.join(os.path.dirname(__file__), '../data/ingredients_translation.xlsx')
-
-
-
-def process_recipe_request(recipe_name: str, new_servings: int):
-    # Load Excel files
+def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
+    # Load Excel recipe data
     xls = pd.ExcelFile(DATA_PATH)
     recipes_df = xls.parse("recipes")
     ingredients_df = xls.parse("ingredients")
     instructions_df = xls.parse("instructions")
-
-    translation_df = pd.read_excel(TRANSLATION_PATH)
 
     # Filter recipe
     recipe_row = recipes_df[recipes_df['name'].str.lower() == recipe_name.lower()]
@@ -29,41 +21,50 @@ def process_recipe_request(recipe_name: str, new_servings: int):
     original_servings = int(recipe_row.iloc[0]['servings'])
     original_cook_time = int(recipe_row.iloc[0]['cook_time'])
 
-    # Detect language based on the ingredients column
-    language_column = [col for col in ingredients_df.columns if col.lower() not in ['recipe_name', 'amount', 'unit']][-1]
-    lang = detect_and_translate(ingredients_df[language_column].iloc[0], detect_only=True).lower()
+    # Determine language column (non-standardize exclusion)
+    language_cols = [col for col in ingredients_df.columns if col.lower() not in ['recipe_name', 'amount', 'unit']]
+    if not language_cols:
+        raise ValueError("No language column found in ingredients data.")
+    language_column = language_cols[-1]
 
-    # Filter ingredients and instructions for the specific recipe
+    # Detect language from first ingredient or default to 'en' if empty
+    first_ing = ingredients_df[language_column].iloc[0]
+    if not isinstance(first_ing, str) or not first_ing.strip():
+        lang = 'en'
+    else:
+        lang = detect_and_translate(first_ing, detect_only=True).lower()
+
+    # Filter ingredients and instructions for the recipe
     recipe_ingredients = ingredients_df[ingredients_df['recipe_name'].str.lower() == recipe_name.lower()]
     recipe_steps = instructions_df[instructions_df['recipe_name'].str.lower() == recipe_name.lower()]
 
-    # Process ingredients with scaling and translation
+    # Process ingredients (scale and translate)
     scaled_ingredients = []
     for _, row in recipe_ingredients.iterrows():
         ing_name_local = row[language_column]
-        unit = row.get('unit', '')
-        raw_amt = row.get('amount', '')
+        unit = row.get('unit', '') or ''
+        raw_amt = row.get('amount', '') or ''
 
-        parsed_amt, _ = extract_amount_and_unit(str(raw_amt))  # ✅ updated function
+        parsed_amt, _ = extract_amount_and_unit(str(raw_amt))
         scaled_amt = parsed_amt * new_servings / original_servings
 
-        # Translate to English using translation DataFrame if language is not English
         translated_name = ing_name_local
         if lang != "en":
-            match = translation_df[translation_df[lang].str.lower() == ing_name_local.lower()]
-            if not match.empty:
-                translated_name = match.iloc[0]['en']
+            # Use translation_df to map translated name
+            matches = translation_df[translation_df[lang].str.lower() == str(ing_name_local).lower()]
+            if not matches.empty:
+                translated_name = matches.iloc[0]['en']
 
         scaled_ingredients.append({
-            'ingredient': translated_name,
-            'amount': format_fraction(scaled_amt),
-            'unit': unit
+            "name": translated_name,
+            "formattedAmount": format_fraction(scaled_amt),
+            "unit": unit
         })
 
-    # Adjusted cook time (simple scaling logic)
+    # Adjust cook time heuristically
     est_cook_time = int(original_cook_time + 0.1 * (new_servings - original_servings) * original_cook_time)
 
-    # Rewrite instructions using translated and scaled ingredients
+    # Rewrite instructions with scaled ingredients
     updated_instructions = []
     for _, row in recipe_steps.iterrows():
         original_step = row[language_column]
@@ -71,18 +72,18 @@ def process_recipe_request(recipe_name: str, new_servings: int):
         updated_instructions.append(rewritten)
 
     return {
-        'recipe_name': recipe_name,
-        'original_servings': original_servings,
-        'new_servings': new_servings,
-        'estimated_cook_time': f"{est_cook_time} minutes",
-        'ingredients': scaled_ingredients,
-        'instructions': updated_instructions,
-        'language_detected': lang
+        "recipe": recipe_name,
+        "original_servings": original_servings,
+        "new_servings": new_servings,
+        "original_time": f"{original_cook_time} minutes",
+        "adjusted_time": f"{est_cook_time} minutes",
+        "ingredients": scaled_ingredients,
+        "steps": updated_instructions,
+        "language_detected": lang
     }
 
-
 def format_fraction(amount: float) -> str:
-    """Format number into fractions like 1/2, 1 1/4, etc."""
+    """Format float to fractions, e.g., 1 1/2, 3/4."""
     from fractions import Fraction
     frac = Fraction(amount).limit_denominator(8)
     if frac.numerator == 0:
