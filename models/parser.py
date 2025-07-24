@@ -3,7 +3,7 @@ from fractions import Fraction
 from word2number import w2n
 
 def normalize(text):
-    """Clean and convert unicode fractions to ASCII."""
+    """Clean input text and convert unicode fractions to ASCII equivalents."""
     text = text.lower().strip()
     text = re.sub(r'[\u200b\n\r\t]', ' ', text)
 
@@ -19,8 +19,8 @@ def normalize(text):
 
 def extract_amount_and_unit(text):
     """
-    Extracts the numeric quantity and unit from a string like '1 1/2 cups'.
-    Returns (amount: float, unit: str)
+    Extract numeric amount and unit from ingredient amount string like "1 1/2 cups".
+    Returns (float amount, string unit).
     """
     if not text or not isinstance(text, str):
         return 0.0, ""
@@ -33,23 +33,34 @@ def extract_amount_and_unit(text):
 
     for i, token in enumerate(tokens):
         try:
-            # Try fraction first (e.g., 1/2, 3 1/4)
-            if '/' in token or token.replace('.', '', 1).isdigit():
+            # Handle fractions and decimals, possibly with spaces like "1 1/4"
+            if '/' in token:
+                parts = token.split()
+                # Sum fractions in token separated by spaces - usually token is single, so just parse fraction
                 frac = float(sum(Fraction(p) for p in token.split()))
                 amount = frac
                 matched = True
                 continue
-            # Try converting word-based number (e.g., one, two)
+            # else try to convert as float or integer
+            if token.replace('.', '', 1).isdigit():
+                amount = float(token)
+                matched = True
+                continue
+            # Try word numbers like 'one', 'two'
             if not matched:
                 amount = w2n.word_to_num(token)
                 matched = True
                 continue
-        except:
-            # Everything after amount is considered unit
+        except Exception:
             if matched:
+                # The rest tokens after amount considered units
                 unit_tokens = tokens[i:]
                 break
             continue
 
+    if not matched:
+        # If no amount found, fallback 0 and whole text as unit
+        return 0.0, text
+    
     unit = ' '.join(unit_tokens).strip()
     return amount, unit
