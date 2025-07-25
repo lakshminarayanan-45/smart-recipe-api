@@ -1,10 +1,5 @@
 import os
-import re
 import pandas as pd
-import spacy
-from math import log
-from fractions import Fraction
-from difflib import get_close_matches
 from models.translator import detect_language
 from models.rewriter import rewrite_instructions_with_quantity
 from models.parser import (
@@ -13,21 +8,15 @@ from models.parser import (
     format_fraction,
     scale_cooking_time,
 )
-import logging
 
-# Load spaCy model once
-nlp = spacy.load("en_core_web_sm")
-
-# Set paths to Excel files
 BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 RECIPE_DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
 TRANSLATION_PATH = os.path.join(BASE_DIR, "data", "ingredients_translation.xlsx")
 
-# Load recipe data and translation/scale info once
-xls = pd.ExcelFile(RECIPE_DATA_PATH, engine='openpyxl')
+# Load all recipe sheets as a dict: {sheet_name: DataFrame}
+all_sheets = pd.read_excel(RECIPE_DATA_PATH, sheet_name=None, engine='openpyxl')
 translation_df = pd.read_excel(TRANSLATION_PATH, engine='openpyxl')
 
-# Build scale lookup dictionary from translation_df
 def build_scale_lookup(df):
     scale_lookup = {}
     for _, row in df.iterrows():
@@ -36,14 +25,15 @@ def build_scale_lookup(df):
         if en_name:
             scale_lookup[en_name] = scale_type
     return scale_lookup
-
 SCALE_LOOKUP = build_scale_lookup(translation_df)
+
+from math import log
+from difflib import get_close_matches
 
 def get_scale_type(ingredient_name):
     norm = ingredient_name.lower()
     if norm in SCALE_LOOKUP:
         return SCALE_LOOKUP[norm]
-    # Fuzzy matching fallback
     for key in SCALE_LOOKUP:
         if key in norm or norm in key:
             return SCALE_LOOKUP[key]
@@ -56,25 +46,20 @@ def get_scale_type(ingredient_name):
         return SCALE_LOOKUP[matches[0]]
     return "LINEAR"
 
-BASE_SERVINGS = 2  # Base servings to scale from
+BASE_SERVINGS = 2
 
 def scale_ingredient(item, servings, base=BASE_SERVINGS):
     name = item["name"]
     qty = item["amount"]
     scale_type = get_scale_type(name)
-    logging.debug(f"Scaling ingredient '{name}' of qty {qty} with scale_type '{scale_type}'")
     if scale_type == "FIXED":
         scaled = qty
     elif scale_type == "LOG":
-        try:
-            # Prevent math domain error when servings=1 (log(1)=0)
-            if servings <= 1:
-                scaled = qty
-            else:
-                scaled = qty * (log(servings) / log(base))
-        except Exception:
-            scaled = qty * (servings / base)
-    else:  # LINEAR or default
+        if servings <= 1:
+            scaled = qty
+        else:
+            scaled = qty * (log(servings) / log(base))
+    else:
         scaled = qty * (servings / base)
     return {
         **item,
@@ -83,11 +68,12 @@ def scale_ingredient(item, servings, base=BASE_SERVINGS):
     }
 
 def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
-    sheet_name, lang_col, lang_code, df_row = detect_language(xls, recipe_name)
+    sheet_name, lang_col, lang_code, df_row = detect_language(all_sheets, recipe_name)
     if df_row is None or df_row.empty:
         raise ValueError("Recipe not found.")
 
     row = df_row.iloc[0]
+    df = all_sheets[sheet_name]  # get the entire cuisine sheet
 
     ing_col = next((c for c in row.index if f"ingredients_{lang_code}" in c.lower()), None)
     if not ing_col:
@@ -113,7 +99,7 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
     for p in parsed_ingredients:
         ingredient_name = p["name"]
         translated_name = ingredient_name
-        if lang_code != "en":
+        if lang_code != "en" and lang_code in translation_df.columns:
             matches = translation_df[translation_df[lang_code].str.lower() == ingredient_name.lower()]
             if not matches.empty:
                 translated_name = matches.iloc[0]['en']
