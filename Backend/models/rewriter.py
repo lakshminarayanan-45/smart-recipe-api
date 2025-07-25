@@ -20,6 +20,9 @@ CORE_NAME_OVERRIDES = {
 }
 
 def extract_core_name(ingredient_name):
+    """
+    Extract core word from ingredient name for matching.
+    """
     if ingredient_name in CORE_NAME_OVERRIDES:
         return CORE_NAME_OVERRIDES[ingredient_name]
     toks = re.split(r"[\s,\-\/\(\)]", ingredient_name)
@@ -30,19 +33,18 @@ def extract_core_name(ingredient_name):
 
 def rewrite_instructions_with_quantity(original_steps, scaled_ingredients, servings):
     """
-    Inject scaled quantities before ingredient names in recipe instructions,
-    while avoiding injection before headers or non-ingredient phrases.
+    Inject scaled ingredient quantities into recipe instructions.
 
     Args:
-        original_steps (list of str): List of original instruction sentences
-        scaled_ingredients (list of dict): List with 'name', 'formattedAmount', 'unit' keys
-        servings (int): Number of servings (currently unused, reserved for future)
+        original_steps (list[str]): list of instruction sentences.
+        scaled_ingredients (list[dict]): list of ingredients with keys 'name', 'formattedAmount', 'unit'.
+        servings (int): number of servings (not used currently).
 
     Returns:
-        list of str: Rewritten instructions with quantities injected properly.
+        list[str]: list of instructions with quantities injected.
     """
 
-    # Join instructions with proper sentence delimiter and ensure ending punctuation
+    # Join instructions preserving sentence boundaries
     full_text = ".\n".join(original_steps).strip()
     if not full_text.endswith(('.', '!', '?')):
         full_text += "."
@@ -55,27 +57,26 @@ def rewrite_instructions_with_quantity(original_steps, scaled_ingredients, servi
         core_name = extract_core_name(original_name)
 
         if core_name in mentioned:
-            continue  # Avoid duplicate injection
+            continue  # avoid duplicate injection
 
         quantity_str = f"{ing['formattedAmount']}{' ' + ing['unit'] if ing['unit'] else ''}"
 
-        # Phase 1: Full phrase exact match
+        # Phase 1: full phrase exact match
         full_phrase_pattern = re.compile(
             rf"\b({re.escape(original_name)})\b", re.IGNORECASE | re.UNICODE)
         match = full_phrase_pattern.search(full_text)
         if match:
-            # Check if preceding text contains a skip prefix indicating a header etc.
             start_idx = match.start()
             preceding_text = full_text[max(0, start_idx - 20):start_idx].lower()
             if any(preceding_text.strip().endswith(prefix) for prefix in skip_prefixes):
-                continue  # skip injection near headings
+                continue  # skip injecting before section headers
 
             replacement = f"{quantity_str} {match.group(1)}"
             full_text = full_phrase_pattern.sub(replacement, full_text, count=1)
             mentioned.add(core_name)
             continue
 
-        # Phase 2: Core word match
+        # Phase 2: core word exact match
         word_pattern = re.compile(
             rf"\b({re.escape(core_name)})\b", re.IGNORECASE | re.UNICODE)
         match = word_pattern.search(full_text)
@@ -83,14 +84,14 @@ def rewrite_instructions_with_quantity(original_steps, scaled_ingredients, servi
             start_idx = match.start()
             preceding_text = full_text[max(0, start_idx - 20):start_idx].lower()
             if any(preceding_text.strip().endswith(prefix) for prefix in skip_prefixes):
-                continue  # skip injecting (likely before a section header)
+                continue
 
             replacement = f"{quantity_str} {match.group(1)}"
             full_text = word_pattern.sub(replacement, full_text, count=1)
             mentioned.add(core_name)
             continue
 
-        # Phase 3: spaCy noun chunk fallback (slower but robust)
+        # Phase 3: spaCy noun chunk fallback
         doc = nlp(full_text)
         for chunk in doc.noun_chunks:
             if core_name in chunk.text.lower() and core_name not in mentioned:
@@ -100,18 +101,19 @@ def rewrite_instructions_with_quantity(original_steps, scaled_ingredients, servi
                 mentioned.add(core_name)
                 break
 
-    # Normalize spacing: replace multiple spaces with single space
+    # Clean up spaces
     full_text = re.sub(r'\s{2,}', ' ', full_text)
 
-    # Fix spacing after punctuation if missing space
+    # Ensure there's a space after punctuation marks
     full_text = re.sub(r'([.,])(?=[^\s])', r'\1 ', full_text)
 
-    # Insert periods before uppercase letters that are missing punctuation (improves readability)
+    # Insert period before uppercase letter if missing between sentences
     full_text = re.sub(r'(\w)([A-Z])', r'\1. \2', full_text)
 
-    # Split back into list of steps, stripping whitespace
+    # Split back into instructions
     steps = [step.strip() for step in full_text.split(".\n") if step.strip()]
-    # Append period if missing at end of step
+
+    # Ensure each step ends with a period
     steps = [step if step.endswith('.') else step + '.' for step in steps]
 
     return steps
