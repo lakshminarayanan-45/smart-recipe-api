@@ -8,7 +8,7 @@ from models.parser import (
     extract_amount_and_unit,
     parse_ingredient_line,
     format_fraction,
-    scale_cooking_time,
+    scale_cooking_time,  # uses improved version from parser.py
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
