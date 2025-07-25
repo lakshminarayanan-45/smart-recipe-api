@@ -7,42 +7,43 @@ from fractions import Fraction
 from difflib import get_close_matches
 from models.translator import detect_language
 from models.rewriter import rewrite_instructions_with_quantity
-from models.parser import extract_amount_and_unit, parse_ingredient_line, format_fraction, scale_ingredient, scale_cooking_time
+from models.parser import (
+    extract_amount_and_unit,
+    parse_ingredient_line,
+    format_fraction,
+    scale_cooking_time,
+)
+import logging
 
-# Load spaCy only once in the module
+# Load spaCy model once
 nlp = spacy.load("en_core_web_sm")
 
-# Excel data path (update this path according to your Backend/data folder)
+# Set paths to Excel files
 BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
-DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
-SCALE_TYPE_PATH = os.path.join(BASE_DIR, "data", "ingredient_scale_type.xlsx")  # Adjust if needed
+RECIPE_DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
+TRANSLATION_PATH = os.path.join(BASE_DIR, "data", "ingredients_translation.xlsx")
 
-# Read the recipe data Excel once at module load
-xls = pd.ExcelFile(DATA_PATH, engine='openpyxl')
+# Load recipe data and translation/scale info once
+xls = pd.ExcelFile(RECIPE_DATA_PATH, engine='openpyxl')
+translation_df = pd.read_excel(TRANSLATION_PATH, engine='openpyxl')
 
-# Read the ingredient scale type lookup file once
-scale_df = pd.read_excel(SCALE_TYPE_PATH, engine='openpyxl')
+# Build scale lookup dictionary from translation_df
+def build_scale_lookup(df):
+    scale_lookup = {}
+    for _, row in df.iterrows():
+        en_name = str(row.get('en', '')).strip().lower()
+        scale_type = str(row.get('scale_type', 'LINEAR')).strip().upper()
+        if en_name:
+            scale_lookup[en_name] = scale_type
+    return scale_lookup
 
-# Build scale lookup dict (ingredient name to scale_type)
-SCALE_LOOKUP = {}
-for _, row in scale_df.iterrows():
-    scale_type = (
-        row.get("Scale Type")
-        or row.get("ScaleType")
-        or row.get("scale_type")
-    )
-    if not scale_type:
-        continue
-    for col in scale_df.columns:
-        if "name" in col.lower():
-            ing_name = str(row[col]).strip().lower()
-            if ing_name:
-                SCALE_LOOKUP[ing_name] = scale_type.strip().upper()
+SCALE_LOOKUP = build_scale_lookup(translation_df)
 
 def get_scale_type(ingredient_name):
     norm = ingredient_name.lower()
     if norm in SCALE_LOOKUP:
         return SCALE_LOOKUP[norm]
+    # Fuzzy matching fallback
     for key in SCALE_LOOKUP:
         if key in norm or norm in key:
             return SCALE_LOOKUP[key]
@@ -55,17 +56,39 @@ def get_scale_type(ingredient_name):
         return SCALE_LOOKUP[matches[0]]
     return "LINEAR"
 
-BASE_SERVINGS = 2  # Base number of servings used for scaling calculations
+BASE_SERVINGS = 2  # Base servings to scale from
+
+def scale_ingredient(item, servings, base=BASE_SERVINGS):
+    name = item["name"]
+    qty = item["amount"]
+    scale_type = get_scale_type(name)
+    logging.debug(f"Scaling ingredient '{name}' of qty {qty} with scale_type '{scale_type}'")
+    if scale_type == "FIXED":
+        scaled = qty
+    elif scale_type == "LOG":
+        try:
+            # Prevent math domain error when servings=1 (log(1)=0)
+            if servings <= 1:
+                scaled = qty
+            else:
+                scaled = qty * (log(servings) / log(base))
+        except Exception:
+            scaled = qty * (servings / base)
+    else:  # LINEAR or default
+        scaled = qty * (servings / base)
+    return {
+        **item,
+        "amount": round(scaled, 2),
+        "formattedAmount": format_fraction(scaled)
+    }
 
 def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
-    # 1. Detect language and find corresponding sheet and row
     sheet_name, lang_col, lang_code, df_row = detect_language(xls, recipe_name)
     if df_row is None or df_row.empty:
         raise ValueError("Recipe not found.")
 
     row = df_row.iloc[0]
 
-    # 2. Identify relevant columns
     ing_col = next((c for c in row.index if f"ingredients_{lang_code}" in c.lower()), None)
     if not ing_col:
         ing_col = next((c for c in row.index if "ingredients_en" in c.lower()), None)
@@ -79,24 +102,28 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
         raise ValueError("Instruction column not found.")
 
     cook_col = next((c for c in row.index if c.lower() in ["cooking", "cookingtime"]), None)
-
     original_time = row[cook_col] if cook_col else "N/A"
     title = row[lang_col]
     adjusted_time = scale_cooking_time(original_time, new_servings, BASE_SERVINGS)
 
-    # 3. Parse ingredients list from column string
     parsed_ingredients = parse_ingredient_line(str(row[ing_col]))
 
-    # 4. Scale ingredients according to servings
-    scaled_ingredients = [scale_ingredient(p, new_servings, BASE_SERVINGS) for p in parsed_ingredients]
+    # Translate and scale
+    scaled_ingredients = []
+    for p in parsed_ingredients:
+        ingredient_name = p["name"]
+        translated_name = ingredient_name
+        if lang_code != "en":
+            matches = translation_df[translation_df[lang_code].str.lower() == ingredient_name.lower()]
+            if not matches.empty:
+                translated_name = matches.iloc[0]['en']
+        scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
+        scaled["name"] = translated_name
+        scaled_ingredients.append(scaled)
 
-    # 5. Extract and split instructions into list of steps
     original_steps = str(row[instr_col]).split(".\n")
-
-    # 6. Rewrite instructions injecting scaled quantities
     rewritten_instructions = rewrite_instructions_with_quantity(original_steps, scaled_ingredients, new_servings)
 
-    # 7. Return structured result matching prior output format
     return {
         "recipe": title,
         "original_servings": BASE_SERVINGS,
@@ -108,8 +135,7 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
                 "name": ing["name"],
                 "formattedAmount": ing["formattedAmount"],
                 "unit": ing.get("unit", ""),
-            }
-            for ing in scaled_ingredients
+            } for ing in scaled_ingredients
         ],
         "steps": rewritten_instructions,
         "language_detected": lang_code
