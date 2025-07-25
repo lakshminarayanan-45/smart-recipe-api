@@ -1,7 +1,6 @@
 import re
 import spacy
 
-# Load spaCy model once
 nlp = spacy.load("en_core_web_sm")
 
 CORE_NAME_OVERRIDES = {
@@ -36,11 +35,10 @@ def rewrite_instructions_with_quantity(original_steps, scaled_ingredients, servi
     skip_prefixes = ['for the', 'for garnishing', 'for seasoning']
 
     for ing in scaled_ingredients:
-        # Skip injecting quantities for ingredients with empty formattedAmount
         if not ing.get("formattedAmount"):
             continue
 
-        original_name = ing['name'].strip()
+        original_name = ing["name"].strip()
         core_name = extract_core_name(original_name)
 
         if core_name in mentioned:
@@ -48,53 +46,44 @@ def rewrite_instructions_with_quantity(original_steps, scaled_ingredients, servi
 
         quantity_str = f"{ing['formattedAmount']}{' ' + ing['unit'] if ing['unit'] else ''}"
 
-        full_phrase_pattern = re.compile(
-            rf"\b({re.escape(original_name)})\b", re.IGNORECASE | re.UNICODE)
-        match = full_phrase_pattern.search(full_text)
+        full_phrase_pat = re.compile(rf"\b({re.escape(original_name)})\b", re.IGNORECASE | re.UNICODE)
+        match = full_phrase_pat.search(full_text)
         if match:
             start_idx = match.start()
             preceding_text = full_text[max(0, start_idx - 20):start_idx].lower()
-            if any(preceding_text.strip().endswith(prefix) for prefix in skip_prefixes):
+            if any(preceding_text.strip().endswith(p) for p in skip_prefixes):
                 continue
-
             replacement = f"{quantity_str} {match.group(1)}"
-            full_text = full_phrase_pattern.sub(replacement, full_text, count=1)
+            full_text = full_phrase_pat.sub(replacement, full_text, count=1)
             mentioned.add(core_name)
             continue
 
-        word_pattern = re.compile(
-            rf"\b({re.escape(core_name)})\b", re.IGNORECASE | re.UNICODE)
-        match = word_pattern.search(full_text)
+        word_pat = re.compile(rf"\b({re.escape(core_name)})\b", re.IGNORECASE | re.UNICODE)
+        match = word_pat.search(full_text)
         if match:
             start_idx = match.start()
             preceding_text = full_text[max(0, start_idx - 20):start_idx].lower()
-            if any(preceding_text.strip().endswith(prefix) for prefix in skip_prefixes):
+            if any(preceding_text.strip().endswith(p) for p in skip_prefixes):
                 continue
-
             replacement = f"{quantity_str} {match.group(1)}"
-            full_text = word_pattern.sub(replacement, full_text, count=1)
+            full_text = word_pat.sub(replacement, full_text, count=1)
             mentioned.add(core_name)
             continue
 
         doc = nlp(full_text)
         for chunk in doc.noun_chunks:
             if core_name in chunk.text.lower() and core_name not in mentioned:
-                phrase_pattern = re.compile(re.escape(chunk.text), re.IGNORECASE | re.UNICODE)
+                phrase_pat = re.compile(re.escape(chunk.text), re.IGNORECASE | re.UNICODE)
                 replacement = f"{quantity_str} {chunk.text}"
-                full_text = phrase_pattern.sub(replacement, full_text, count=1)
+                full_text = phrase_pat.sub(replacement, full_text, count=1)
                 mentioned.add(core_name)
                 break
 
-    # Normalize spacing
-    full_text = re.sub(r'\s{2,}', ' ', full_text)
-
-    # Fix spacing after punctuation
-    full_text = re.sub(r'([.,])(?=[^\s])', r'\1 ', full_text)
-
-    # Add period before uppercase if missing (helps sentence breaks)
-    full_text = re.sub(r'(\w)([A-Z])', r'\1. \2', full_text)
+    full_text = re.sub(r"\s{2,}", " ", full_text)
+    full_text = re.sub(r"([.,])(?=[^\s])", r"\1 ", full_text)
+    full_text = re.sub(r"(\w)([A-Z])", r"\1. \2", full_text)
 
     steps = [step.strip() for step in full_text.split(".\n") if step.strip()]
-    steps = [step if step.endswith('.') else step + '.' for step in steps]
+    steps = [step if step.endswith(".") else step + "." for step in steps]
 
     return steps
