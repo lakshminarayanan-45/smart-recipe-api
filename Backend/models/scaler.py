@@ -79,8 +79,6 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
         raise ValueError("Recipe not found.")
 
     row = df_row.iloc[0]
-    # Access full sheet (cuisine) DataFrame if needed
-    # df = all_sheets[sheet_name]
 
     ing_col = next((c for c in row.index if f"ingredients_{lang_code}" in c.lower()), None)
     if not ing_col:
@@ -101,7 +99,7 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
 
     parsed_ingredients = parse_ingredient_line(str(row[ing_col]))
 
-    # Translate and scale
+    # Translate and scale ingredients
     scaled_ingredients = []
     for p in parsed_ingredients:
         ingredient_name = p["name"]
@@ -113,3 +111,23 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
         scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
         scaled["name"] = translated_name
         scaled_ingredients.append(scaled)
+
+    original_steps = str(row[instr_col]).split(".\n")
+    rewritten_instructions = rewrite_instructions_with_quantity(original_steps, scaled_ingredients, new_servings)
+
+    return {
+        "recipe": title,
+        "original_servings": BASE_SERVINGS,
+        "new_servings": new_servings,
+        "original_time": f"{original_time}",
+        "adjusted_time": f"{adjusted_time} minutes",
+        "ingredients": [
+            {
+                "name": ing["name"],
+                "formattedAmount": ing["formattedAmount"],
+                "unit": ing.get("unit", ""),
+            } for ing in scaled_ingredients
+        ],
+        "steps": rewritten_instructions,
+        "language_detected": lang_code
+    }
