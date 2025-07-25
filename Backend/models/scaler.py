@@ -112,4 +112,4 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
                 translated_name = matches.iloc[0]['en']
         scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
         scaled["name"] = translated_name
-        scaled_ingredients.append(scaled
+        scaled_ingredients.append(scaled)
