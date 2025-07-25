@@ -1,5 +1,6 @@
 import re
 from fractions import Fraction
+from math import log
 
 def parse_ingredient_line(text):
     items = [i.strip() for i in re.split(r",|\n", text) if i.strip()]
@@ -66,8 +67,31 @@ def extract_amount_and_unit(text):
     else:
         return 1, ""
 
-def scale_cooking_time(time, servings, base=2):
+def scale_cooking_time(original_time, new_servings, base=2):
+    """
+    Improved cooking time scaling using logarithmic scale and capped multipliers.
+    """
     try:
-        return round(float(time) * (servings / base))
+        original_time = float(original_time)
     except Exception:
         return "N/A"
+
+    if new_servings <= base or original_time <= 0:
+        return round(original_time)
+
+    try:
+        scaled_time = original_time * (log(new_servings) / log(base))
+    except Exception:
+        # fallback linear scaling if log fails
+        scaled_time = original_time * (new_servings / base)
+
+    # Caps to avoid unrealistic high cooking times:
+    max_multiplier = 1.7
+    scaled_time = max(original_time, min(scaled_time, original_time * max_multiplier))
+
+    # Minimum time threshold (optional)
+    min_time = 5
+    if scaled_time < min_time:
+        scaled_time = min_time
+
+    return round(scaled_time)
