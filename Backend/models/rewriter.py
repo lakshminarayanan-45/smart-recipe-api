@@ -1,46 +1,67 @@
+import re
 import spacy
 
-# Load English spaCy model once
 nlp = spacy.load("en_core_web_sm")
 
-def build_ingredient_map(ingredients):
-    """
-    Map ingredient name (lowercase) → replacement string like "1 1/2 cup sugar"
-    """
-    ing_map = {}
-    for ing in ingredients:
-        name = ing.get('name', '').strip().lower()
-        amt = ing.get('formattedAmount', '')
-        unit = ing.get('unit', '').strip()
-        full_phrase = f"{amt} {unit} {name}".strip()
-        ing_map[name] = full_phrase
-    return ing_map
+CORE_NAME_OVERRIDES = {
+    "கப் - தட்டையான அரிசி / அவல்": "அவல்",
+    "கப் - வெல்லம்": "வெல்லம்",
+    "கップ - துருவிய தேங்காய்": "தேங்காய்",
+    "டேபிள் ஸ்பூன் - நெய்": "நெய்",
+    "முந்திரி பருப்பு": "முந்திரி",
+    "சிறிதளவு ஏலக்காய் தூள்.": "ஏலக்காய்",
+    "गाजर - कद्दूकस की हुई": "गाजर",
+    "कप पत्तागोभी - कद्दूकस की हुई": "पत्तागोभी",
+    "छोटा चम्मच हल्दी": "हल्दी",
+    "छोटा चम्मच सरसों के बीज": "सरसों",
+    "छोटा चम्मच हींग": "हींग"
+}
 
-def rewrite_instruction(instruction, scaled_ingredients):
-    """
-    Replace ingredient names in instruction with scaled versions from ingredient map.
-    """
-    ingredient_map = build_ingredient_map(scaled_ingredients)
-    doc = nlp(instruction)
-    updated_tokens = []
+def extract_core_name(ingredient_name):
+    if ingredient_name in CORE_NAME_OVERRIDES:
+        return CORE_NAME_OVERRIDES[ingredient_name]
+    toks = re.split(r"[\s,\-\/\(\)]", ingredient_name)
+    toks = [t.strip(".").strip() for t in toks if t.strip()]
+    if toks:
+        return toks[-1]
+    return ingredient_name
 
-    for token in doc:
-        word = token.text
-        normalized = word.lower()
-        replaced = False
+def rewrite_instructions_with_quantity(original_steps, scaled_ingredients, servings):
+    full_text = ".\n".join(original_steps)
+    mentioned = set()
 
-        # Exact match
-        if normalized in ingredient_map:
-            updated_tokens.append(ingredient_map[normalized])
-            replaced = True
-        else:
-            # Fuzzy match for plurals or prefixes
-            for ing_key in ingredient_map:
-                if normalized.startswith(ing_key) or normalized.rstrip('s') == ing_key:
-                    updated_tokens.append(ingredient_map[ing_key])
-                    replaced = True
-                    break
-        if not replaced:
-            updated_tokens.append(word)
+    for ing in scaled_ingredients:
+        original_name = ing['name'].strip()
+        core_name = extract_core_name(original_name)
 
-    return ' '.join(updated_tokens)
+        if core_name in mentioned:
+            continue
+
+        replacement = f"{ing['formattedAmount']}{' ' + ing['unit'] if ing['unit'] else ''}"
+
+        # Full phrase match
+        full_phrase_pattern = re.compile(rf"\b({re.escape(original_name)})\b", re.IGNORECASE | re.UNICODE)
+        match = full_phrase_pattern.search(full_text)
+        if match:
+            full_text = full_phrase_pattern.sub(f"{replacement} {match.group(1)}", full_text, count=1)
+            mentioned.add(core_name)
+            continue
+
+        # Core word match
+        word_pattern = re.compile(rf"\b({re.escape(core_name)})\b", re.IGNORECASE | re.UNICODE)
+        match = word_pattern.search(full_text)
+        if match:
+            full_text = word_pattern.sub(f"{replacement} {match.group(1)}", full_text, count=1)
+            mentioned.add(core_name)
+            continue
+
+        # spaCy noun chunk fallback
+        doc = nlp(full_text)
+        for chunk in doc.noun_chunks:
+            if core_name in chunk.text.lower() and core_name not in mentioned:
+                phrase_pattern = re.compile(re.escape(chunk.text), re.IGNORECASE | re.UNICODE)
+                full_text = phrase_pattern.sub(f"{replacement} {chunk.text}", full_text, count=1)
+                mentioned.add(core_name)
+                break
+
+    return full_text.split(".\n")
