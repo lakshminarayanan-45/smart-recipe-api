@@ -9,13 +9,35 @@ BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
 
 def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
-    # Load Excel recipe data explicitly specifying openpyxl engine
+    # Load Excel file and specify engine explicitly
     xls = pd.ExcelFile(DATA_PATH, engine='openpyxl')
-    recipes_df = xls.parse("recipes")
-    ingredients_df = xls.parse("ingredients")
-    instructions_df = xls.parse("instructions")
 
-    # Filter recipe
+    # Debug: Print available sheet names — comment out after confirming
+    print(f"Available sheets in Excel file: {xls.sheet_names}")
+
+    # Map expected sheets to actual sheet names - dynamic detection ignoring case and spaces
+    sheet_map = {
+        "recipes": None,
+        "ingredients": None,
+        "instructions": None
+    }
+
+    for key in sheet_map.keys():
+        for sheet_name in xls.sheet_names:
+            if sheet_name.strip().lower() == key.lower():
+                sheet_map[key] = sheet_name
+                break
+
+    missing_sheets = [k for k, v in sheet_map.items() if v is None]
+    if missing_sheets:
+        raise ValueError(f"Missing worksheet(s) in Excel file: {missing_sheets}")
+
+    # Parse data from the sheet names found
+    recipes_df = xls.parse(sheet_map["recipes"])
+    ingredients_df = xls.parse(sheet_map["ingredients"])
+    instructions_df = xls.parse(sheet_map["instructions"])
+
+    # Filter recipe row for given recipe name (case-insensitive match)
     recipe_row = recipes_df[recipes_df['name'].str.lower() == recipe_name.lower()]
     if recipe_row.empty:
         raise ValueError("Recipe not found.")
@@ -23,24 +45,24 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
     original_servings = int(recipe_row.iloc[0]['servings'])
     original_cook_time = int(recipe_row.iloc[0]['cook_time'])
 
-    # Determine language column (non-standardize exclusion)
+    # Identify language columns (exclude known columns)
     language_cols = [col for col in ingredients_df.columns if col.lower() not in ['recipe_name', 'amount', 'unit']]
     if not language_cols:
         raise ValueError("No language column found in ingredients data.")
     language_column = language_cols[-1]
 
-    # Detect language from first ingredient or default to 'en' if empty
+    # Detect the language using translator module or default to 'en'
     first_ing = ingredients_df[language_column].iloc[0]
     if not isinstance(first_ing, str) or not first_ing.strip():
         lang = 'en'
     else:
         lang = detect_and_translate(first_ing, detect_only=True).lower()
 
-    # Filter ingredients and instructions for the recipe
+    # Filter ingredients and instructions for the specific recipe
     recipe_ingredients = ingredients_df[ingredients_df['recipe_name'].str.lower() == recipe_name.lower()]
     recipe_steps = instructions_df[instructions_df['recipe_name'].str.lower() == recipe_name.lower()]
 
-    # Process ingredients (scale and translate)
+    # Scale ingredients and translate if necessary
     scaled_ingredients = []
     for _, row in recipe_ingredients.iterrows():
         ing_name_local = row[language_column]
@@ -52,7 +74,6 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
 
         translated_name = ing_name_local
         if lang != "en":
-            # Use translation_df to map translated name
             matches = translation_df[translation_df[lang].str.lower() == str(ing_name_local).lower()]
             if not matches.empty:
                 translated_name = matches.iloc[0]['en']
@@ -63,10 +84,10 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
             "unit": unit
         })
 
-    # Adjust cook time heuristically
+    # Heuristic cooking time adjustment
     est_cook_time = int(original_cook_time + 0.1 * (new_servings - original_servings) * original_cook_time)
 
-    # Rewrite instructions with scaled ingredients
+    # Rewrite instructions based on scaled ingredients
     updated_instructions = []
     for _, row in recipe_steps.iterrows():
         original_step = row[language_column]
