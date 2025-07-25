@@ -99,7 +99,7 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
 
     parsed_ingredients = parse_ingredient_line(str(row[ing_col]))
 
-    # Translate and scale ingredients
+    # Translate and scale ingredients, skip scaling if amount is zero or None
     scaled_ingredients = []
     for p in parsed_ingredients:
         ingredient_name = p["name"]
@@ -108,7 +108,13 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
             matches = translation_df[translation_df[lang_code].str.lower() == ingredient_name.lower()]
             if not matches.empty:
                 translated_name = matches.iloc[0]['en']
-        scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
+
+        if not p["amount"] or p["amount"] == 0:
+            scaled = p.copy()
+            scaled["formattedAmount"] = ""
+        else:
+            scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
+
         scaled["name"] = translated_name
         scaled_ingredients.append(scaled)
 
