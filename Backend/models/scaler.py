@@ -4,75 +4,75 @@ from models.translator import detect_and_translate
 from models.rewriter import rewrite_instruction
 from models.parser import extract_amount_and_unit
 
-# Compute base directory: one level up from models/ is Backend/
+# Compute base directory - one level up from models/ is Backend/
 BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
 
-def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
-    # Load Excel file and specify engine explicitly
+def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame, cuisine_sheet: str = "North Indian"):
+    """
+    Process a recipe request using a specific cuisine sheet from the merged Excel file.
+
+    :param recipe_name: Name of the recipe (case-insensitive)
+    :param new_servings: Number of servings to scale to
+    :param translation_df: DataFrame for ingredient translations
+    :param cuisine_sheet: Sheet name to use in Excel file
+    :return: dict with scaled recipe data
+    """
+
+    # Load sheet data explicitly
     xls = pd.ExcelFile(DATA_PATH, engine='openpyxl')
 
-    # Debug: Print available sheet names — comment out after confirming
-    print(f"Available sheets in Excel file: {xls.sheet_names}")
+    # Validate sheet exists
+    if cuisine_sheet not in xls.sheet_names:
+        raise ValueError(f"Worksheet '{cuisine_sheet}' not found in Excel file. Available sheets: {xls.sheet_names}")
 
-    # Map expected sheets to actual sheet names - dynamic detection ignoring case and spaces
-    sheet_map = {
-        "recipes": None,
-        "ingredients": None,
-        "instructions": None
-    }
+    df = xls.parse(cuisine_sheet)
 
-    for key in sheet_map.keys():
-        for sheet_name in xls.sheet_names:
-            if sheet_name.strip().lower() == key.lower():
-                sheet_map[key] = sheet_name
-                break
+    # Normalize column names to lower for ease
+    df.columns = [col.lower() for col in df.columns]
 
-    missing_sheets = [k for k, v in sheet_map.items() if v is None]
-    if missing_sheets:
-        raise ValueError(f"Missing worksheet(s) in Excel file: {missing_sheets}")
-
-    # Parse data from the sheet names found
-    recipes_df = xls.parse(sheet_map["recipes"])
-    ingredients_df = xls.parse(sheet_map["ingredients"])
-    instructions_df = xls.parse(sheet_map["instructions"])
-
-    # Filter recipe row for given recipe name (case-insensitive match)
-    recipe_row = recipes_df[recipes_df['name'].str.lower() == recipe_name.lower()]
+    # Find the recipe row by name (case insensitive)
+    recipe_row = df[df['name'].str.lower() == recipe_name.lower()]
     if recipe_row.empty:
-        raise ValueError("Recipe not found.")
+        raise ValueError(f"Recipe '{recipe_name}' not found in sheet '{cuisine_sheet}'.")
 
-    original_servings = int(recipe_row.iloc[0]['servings'])
-    original_cook_time = int(recipe_row.iloc[0]['cook_time'])
+    recipe_row = recipe_row.iloc[0]
 
-    # Identify language columns (exclude known columns)
-    language_cols = [col for col in ingredients_df.columns if col.lower() not in ['recipe_name', 'amount', 'unit']]
-    if not language_cols:
-        raise ValueError("No language column found in ingredients data.")
-    language_column = language_cols[-1]
+    # Extract servings and cooking time (with fallback defaults)
+    original_servings = int(recipe_row.get('servings', 1))
+    original_cook_time = int(recipe_row.get('cooking', 0))  # Adjust column name if different
 
-    # Detect the language using translator module or default to 'en'
-    first_ing = ingredients_df[language_column].iloc[0]
-    if not isinstance(first_ing, str) or not first_ing.strip():
-        lang = 'en'
-    else:
-        lang = detect_and_translate(first_ing, detect_only=True).lower()
+    # Extract ingredients and instructions text columns - expected format:
+    ingredients_raw = recipe_row.get('ingredients_en', '')
+    instructions_raw = recipe_row.get('instructions_en', '')
 
-    # Filter ingredients and instructions for the specific recipe
-    recipe_ingredients = ingredients_df[ingredients_df['recipe_name'].str.lower() == recipe_name.lower()]
-    recipe_steps = instructions_df[instructions_df['recipe_name'].str.lower() == recipe_name.lower()]
+    # TODO: You need to parse `ingredients_raw` and `instructions_raw` strings into lists
+    # For example, if ingredients are separated by newline or commas, split on that:
+    # This part depends on your data format.
 
-    # Scale ingredients and translate if necessary
+    # Simple parsing example (customize for your data!)
+    ingredients_list = [line.strip() for line in str(ingredients_raw).split('\n') if line.strip()]
+    instructions_list = [line.strip() for line in str(instructions_raw).split('\n') if line.strip()]
+
+    # We now construct a DataFrame for ingredients similar to your old code structure to scale
+    # But since we lack unit/amount columns, you might need to parse amounts and units from string
+    # This example assumes each ingredient contains amount and unit somehow (you may improve parsing)
+
     scaled_ingredients = []
-    for _, row in recipe_ingredients.iterrows():
-        ing_name_local = row[language_column]
-        unit = row.get('unit', '') or ''
-        raw_amt = row.get('amount', '') or ''
-
-        parsed_amt, _ = extract_amount_and_unit(str(raw_amt))
+    for ing in ingredients_list:
+        # Parse amount and unit from ingredient string using your parser function
+        parsed_amt, unit = extract_amount_and_unit(ing)
         scaled_amt = parsed_amt * new_servings / original_servings
+        # Extract just the ingredient name (you may want to improve this)
+        # For this example, let's assume after amount and unit, the rest is name:
+        # This depends on your string format, so you might need more NLP or rules.
+        # As a fallback, use full string if extraction is complex:
+        ing_name_local = ing
 
+        # Translate ingredient name if needed
         translated_name = ing_name_local
+        lang = "en"  # Since data is in English, set to 'en' or detect if you want
+
         if lang != "en":
             matches = translation_df[translation_df[lang].str.lower() == str(ing_name_local).lower()]
             if not matches.empty:
@@ -81,17 +81,16 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
         scaled_ingredients.append({
             "name": translated_name,
             "formattedAmount": format_fraction(scaled_amt),
-            "unit": unit
+            "unit": unit,
         })
 
-    # Heuristic cooking time adjustment
+    # Adjust cook time heuristically
     est_cook_time = int(original_cook_time + 0.1 * (new_servings - original_servings) * original_cook_time)
 
-    # Rewrite instructions based on scaled ingredients
+    # Rewrite instructions by injecting scaled ingredients (this depends on your rewriter code)
     updated_instructions = []
-    for _, row in recipe_steps.iterrows():
-        original_step = row[language_column]
-        rewritten = rewrite_instruction(original_step, scaled_ingredients)
+    for step in instructions_list:
+        rewritten = rewrite_instruction(step, scaled_ingredients)
         updated_instructions.append(rewritten)
 
     return {
@@ -102,11 +101,10 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
         "adjusted_time": f"{est_cook_time} minutes",
         "ingredients": scaled_ingredients,
         "steps": updated_instructions,
-        "language_detected": lang
+        "language_detected": lang,
     }
 
 def format_fraction(amount: float) -> str:
-    """Format float to fractions, e.g., 1 1/2, 3/4."""
     from fractions import Fraction
     frac = Fraction(amount).limit_denominator(8)
     if frac.numerator == 0:
