@@ -4,7 +4,7 @@ import os
 import sys
 from flask_cors import CORS
 
-# Add models folder to sys.path
+# Ensure models folder is accessible for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models')))
 from scaler import process_recipe_request
 
