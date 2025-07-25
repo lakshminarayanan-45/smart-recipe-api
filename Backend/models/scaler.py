@@ -8,8 +8,11 @@ from models.parser import (
     extract_amount_and_unit,
     parse_ingredient_line,
     format_fraction,
-    scale_cooking_time,  # uses improved version from parser.py
+    scale_cooking_time,
 )
+
+from math import log
+from difflib import get_close_matches
 
 BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 RECIPE_DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
@@ -27,10 +30,8 @@ def build_scale_lookup(df):
         if en_name:
             scale_lookup[en_name] = scale_type
     return scale_lookup
-SCALE_LOOKUP = build_scale_lookup(translation_df)
 
-from math import log
-from difflib import get_close_matches
+SCALE_LOOKUP = build_scale_lookup(translation_df)
 
 def get_scale_type(ingredient_name):
     norm = ingredient_name.lower()
@@ -60,7 +61,10 @@ def scale_ingredient(item, servings, base=BASE_SERVINGS):
         if servings <= 1:
             scaled = qty
         else:
-            scaled = qty * (log(servings) / log(base))
+            try:
+                scaled = qty * (log(servings) / log(base))
+            except Exception:
+                scaled = qty * (servings / base)  # fallback
     else:
         scaled = qty * (servings / base)
     return {
@@ -75,7 +79,8 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
         raise ValueError("Recipe not found.")
 
     row = df_row.iloc[0]
-    df = all_sheets[sheet_name]  # get the entire cuisine sheet
+    # Access full sheet (cuisine) DataFrame if needed
+    # df = all_sheets[sheet_name]
 
     ing_col = next((c for c in row.index if f"ingredients_{lang_code}" in c.lower()), None)
     if not ing_col:
@@ -107,24 +112,4 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
                 translated_name = matches.iloc[0]['en']
         scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
         scaled["name"] = translated_name
-        scaled_ingredients.append(scaled)
-
-    original_steps = str(row[instr_col]).split(".\n")
-    rewritten_instructions = rewrite_instructions_with_quantity(original_steps, scaled_ingredients, new_servings)
-
-    return {
-        "recipe": title,
-        "original_servings": BASE_SERVINGS,
-        "new_servings": new_servings,
-        "original_time": f"{original_time}",
-        "adjusted_time": f"{adjusted_time} minutes",
-        "ingredients": [
-            {
-                "name": ing["name"],
-                "formattedAmount": ing["formattedAmount"],
-                "unit": ing.get("unit", ""),
-            } for ing in scaled_ingredients
-        ],
-        "steps": rewritten_instructions,
-        "language_detected": lang_code
-    }
+        scaled_ingredients.append(scaled
