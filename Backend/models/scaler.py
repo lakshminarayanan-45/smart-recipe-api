@@ -22,6 +22,7 @@ TRANSLATION_PATH = os.path.join(BASE_DIR, "data", "ingredients_translation.xlsx"
 all_sheets = pd.read_excel(RECIPE_DATA_PATH, sheet_name=None, engine='openpyxl')
 translation_df = pd.read_excel(TRANSLATION_PATH, engine='openpyxl')
 
+
 def build_scale_lookup(df):
     scale_lookup = {}
     for _, row in df.iterrows():
@@ -31,7 +32,9 @@ def build_scale_lookup(df):
             scale_lookup[en_name] = scale_type
     return scale_lookup
 
+
 SCALE_LOOKUP = build_scale_lookup(translation_df)
+
 
 def get_scale_type(ingredient_name):
     norm = ingredient_name.lower()
@@ -49,7 +52,41 @@ def get_scale_type(ingredient_name):
         return SCALE_LOOKUP[matches[0]]
     return "LINEAR"
 
+
 BASE_SERVINGS = 2
+
+
+def combine_names(original, translated):
+    """
+    Combine original and translated ingredient names avoiding duplication.
+
+    Examples:
+    - If translated == original, returns original.
+    - If one is a substring of the other, returns the longer one.
+    - Else combines with a single space in between.
+    """
+    original_lower = original.lower()
+    translated_lower = translated.lower()
+
+    if translated_lower == original_lower:
+        return original
+    if translated_lower in original_lower:
+        return original
+    if original_lower in translated_lower:
+        return translated
+    # Remove duplicate words (strict, case insensitive)
+    # Split, remove duplicates, and join preserving order
+    original_tokens = original.split()
+    translated_tokens = translated.split()
+    combined_tokens = []
+
+    for token in translated_tokens + original_tokens:
+        token_clean = token.lower()
+        if token_clean not in [t.lower() for t in combined_tokens]:
+            combined_tokens.append(token)
+
+    return ' '.join(combined_tokens)
+
 
 def scale_ingredient(item, servings, base=BASE_SERVINGS):
     name = item["name"]
@@ -72,6 +109,7 @@ def scale_ingredient(item, servings, base=BASE_SERVINGS):
         "amount": round(scaled, 2),
         "formattedAmount": format_fraction(scaled)
     }
+
 
 def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
     sheet_name, lang_col, lang_code, df_row = detect_language(all_sheets, recipe_name)
@@ -99,7 +137,7 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
 
     parsed_ingredients = parse_ingredient_line(str(row[ing_col]))
 
-    # Translate and scale ingredients, skip scaling if amount is zero or None
+    # Translate and scale, then combine names carefully to avoid word duplication
     scaled_ingredients = []
     for p in parsed_ingredients:
         ingredient_name = p["name"]
@@ -109,13 +147,12 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
             if not matches.empty:
                 translated_name = matches.iloc[0]['en']
 
-        if not p["amount"] or p["amount"] == 0:
-            scaled = p.copy()
-            scaled["formattedAmount"] = ""
-        else:
-            scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
+        scaled = scale_ingredient(p, new_servings, BASE_SERVINGS)
 
-        scaled["name"] = translated_name
+        # Fix word repetition by combining translations and originals carefully
+        combined_name = combine_names(ingredient_name, translated_name)
+        scaled["name"] = combined_name
+
         scaled_ingredients.append(scaled)
 
     original_steps = str(row[instr_col]).split(".\n")
