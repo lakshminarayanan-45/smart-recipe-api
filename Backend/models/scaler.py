@@ -1,5 +1,7 @@
 import os
 import pandas as pd
+import re
+
 from models.translator import detect_language
 from models.rewriter import rewrite_instructions_with_quantity
 from models.parser import (
