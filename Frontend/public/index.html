@@ -35,7 +35,6 @@
   <h1>🍲 Smart Recipe Adjuster</h1>
   <input id="recipeName" placeholder="Enter Recipe Name" />
   <input id="servings" type="number" min="1" placeholder="Number of Servings" />
-  
   <button id="adjustBtn">Adjust Recipe</button>
 
   <div class="response" id="responseBox" style="display:none">
@@ -48,6 +47,8 @@
   </div>
 
   <script>
+    const API_KEY = "recipetoken123"; // Replace with your real API key or better use environment variable during build
+
     const adjustBtn = document.getElementById("adjustBtn");
     const responseBox = document.getElementById("responseBox");
 
@@ -60,15 +61,15 @@
         return;
       }
 
-      // Replace this with your actual backend URL
+      // Replace this URL with your actual deployed backend URL
       const url = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
 
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
-            // No API key header required here
+            "Content-Type": "application/json",
+            "X-API-KEY": API_KEY  // Send API key transparently
           },
           body: JSON.stringify({
             recipe_name: recipe,
