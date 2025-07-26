@@ -22,7 +22,7 @@ except Exception as e:
     ingredient_translations = None
 
 # Load API key from environment variable; Provide a default only for development/testing
-API_KEY = os.environ.get("RECIPE_API_KEY", "recipetoken123")
+API_KEY = os.environ.get("RECIPE_API_KEY", "queenbee@987")
 
 def check_api_key():
     """
