@@ -22,7 +22,7 @@ except Exception as e:
     ingredient_translations = None
 
 # API Key - Load from environment variable or fallback (use a secure key in production)
-API_KEY = os.environ.get("RECIPE_API_KEY", "recipetoken123")
+API_KEY = os.environ.get("RECIPE_API_KEY", "queenbee@987")
 
 def check_api_key():
     """
