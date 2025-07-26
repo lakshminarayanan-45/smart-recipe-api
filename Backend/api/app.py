@@ -21,12 +21,28 @@ except Exception as e:
     print(f"❌ Failed to load ingredients translation file: {e}")
     ingredient_translations = None
 
+# API Key - Load from environment variable or fallback (use a secure key in production)
+API_KEY = os.environ.get("RECIPE_API_KEY", "recipetoken123")
+
+def check_api_key():
+    """
+    Extract API key from 'X-API-KEY' or 'Authorization' header (Bearer token), and verify.
+    """
+    key = request.headers.get("X-API-KEY") or request.headers.get("Authorization")
+    if key and key.lower().startswith("bearer "):
+        key = key[7:]
+    return key == API_KEY
+
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"message": "Smart Recipe API is running 🚀"})
 
 @app.route("/scale_recipe", methods=["POST"])
 def scale_recipe():
+    # Enforce API key check
+    if not check_api_key():
+        return jsonify({"error": "Unauthorized: Invalid or missing API key"}), 401
+
     data = request.get_json()
     recipe_name = data.get("recipe_name")
     new_servings = data.get("new_servings")
