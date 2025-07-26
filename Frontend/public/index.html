@@ -36,9 +36,6 @@
   <input id="recipeName" placeholder="Enter Recipe Name" />
   <input id="servings" type="number" min="1" placeholder="Number of Servings" />
   
-  <!-- Optional: input for API key, or you can hardcode the value in JS below -->
-  <input id="apiKey" placeholder="Enter API Key" style="width: 300px;" />
-
   <button id="adjustBtn">Adjust Recipe</button>
 
   <div class="response" id="responseBox" style="display:none">
@@ -57,27 +54,21 @@
     adjustBtn.addEventListener("click", async () => {
       const recipe = document.getElementById("recipeName").value.trim();
       const servings = document.getElementById("servings").value.trim();
-      const apiKey = document.getElementById("apiKey").value.trim();
 
       if (!recipe || !servings) {
         alert("Please enter both recipe name and number of servings.");
         return;
       }
 
-      if (!apiKey) {
-        alert("Please enter API key.");
-        return;
-      }
-
-      // Replace this URL with your actual deployed backend URL
+      // Replace this with your actual backend URL
       const url = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
 
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "X-API-KEY": apiKey   // Pass the API key here
+            "Content-Type": "application/json"
+            // No API key header required here
           },
           body: JSON.stringify({
             recipe_name: recipe,
@@ -89,23 +80,19 @@
 
         if (!res.ok) throw new Error(data.error || "Unknown error");
 
-        // Show response box
         responseBox.style.display = "block";
 
         document.getElementById("recipeTitle").innerText = `${data.recipe} (for ${data.new_servings} servings)`;
         document.getElementById("timeInfo").innerText = `${data.original_time} ➡ ${data.adjusted_time}`;
 
-        // Ingredients
         const ingredientsDiv = document.getElementById("ingredients");
         ingredientsDiv.innerHTML = "";
         data.ingredients.forEach(i => {
-          // Format nicely even if formattedAmount or unit is empty
           const amt = i.formattedAmount ? i.formattedAmount + " " : "";
           const unit = i.unit ? i.unit + " " : "";
           ingredientsDiv.innerHTML += `<div class="ingredient">- ${amt}${unit}${i.name}</div>`;
         });
 
-        // Steps
         const stepsDiv = document.getElementById("steps");
         stepsDiv.innerHTML = "";
         data.steps.forEach((step, idx) => {
