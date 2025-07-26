@@ -17,7 +17,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 RECIPE_DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
 TRANSLATION_PATH = os.path.join(BASE_DIR, "data", "ingredients_translation.xlsx")
 
-# Load all recipe sheets as dict: {sheet_name: DataFrame}
 all_sheets = pd.read_excel(RECIPE_DATA_PATH, sheet_name=None, engine='openpyxl')
 translation_df = pd.read_excel(TRANSLATION_PATH, engine='openpyxl')
 
@@ -80,7 +79,7 @@ def scale_ingredient(item, servings, base=BASE_SERVINGS):
             try:
                 scaled = qty * (log(servings) / log(base))
             except Exception:
-                scaled = qty * (servings / base)  # fallback to linear
+                scaled = qty * (servings / base)
     else:
         scaled = qty * (servings / base)
     return {
@@ -123,7 +122,7 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
             matches = translation_df[translation_df[lang_code].str.lower() == ingredient_name.lower()]
             if not matches.empty:
                 translated_name = matches.iloc[0]['en']
-        if not p["amount"] or p["amount"] == 0:
+        if p["amount"] is None:
             scaled = p.copy()
             scaled["formattedAmount"] = ""
         else:
