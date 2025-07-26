@@ -5,48 +5,45 @@ from math import log
 def parse_ingredient_line(text):
     items = [i.strip() for i in re.split(r",|\n", text) if i.strip()]
     results = []
+    header_phrases = [
+        "salt to taste", "as needed", "to taste", "required",
+        "for the seasoning:", "for the seasoning", "for garnishing", "for garnish", "for the garnish",
+        "for serving", "for tempering", "for spice paste",
+        "for the", "for garnishing:", "for serving:", "for tempering:"
+    ]
     for item in items:
         item = item.replace("–", "-")
         pattern = r"(?P<qty>[\d\./\-]+)?\s*(?P<unit>[^\d\s\-]+)?\s*-?\s*(?P<name>.+)"
         match = re.match(pattern, item)
+        name = item
+        amount = None
+        unit = ""
+        formattedAmount = ""
         if match:
             qty = match.group("qty")
             name = match.group("name").strip()
             unit = match.group("unit").strip() if match.group("unit") else ""
-            # Section headers and unquantifiable lines:
-            if any(x in name.lower() for x in [
-                "salt to taste", "as needed", "to taste", "required",
-                "for the seasoning:", "for the seasoning", "for garnishing",
-                "for the garnish", "for serving", "for tempering", "for spice paste"
-            ]) or not qty:
+            # Is it a header, 'to taste', 'required', or missing qty?
+            if (not qty) or any(x in name.lower() for x in header_phrases):
                 amount = None
-                formattedAmount = ""
             else:
                 try:
                     if "-" in qty:
                         parts = re.findall(r"[\d\.]+", qty)
                         amount = sum(float(p) for p in parts) / len(parts) if parts else None
                     else:
-                        amount = eval(qty) if qty else None
+                        amount = eval(qty)
                 except Exception:
                     amount = None
-                formattedAmount = format_fraction(amount) if amount else ""
-            results.append({
-                "amount": amount,
-                "unit": unit,
-                "name": name,
-                "formattedAmount": formattedAmount
-            })
-        else:
-            # No match (usually a header or odd line): don't inject quantity
-            results.append({
-                "amount": None,
-                "unit": "",
-                "name": item,
-                "formattedAmount": ""
-            })
+            if amount is not None:
+                formattedAmount = format_fraction(amount)
+        results.append({
+            "amount": amount,
+            "unit": unit,
+            "name": name,
+            "formattedAmount": formattedAmount if amount else ""
+        })
     return results
-
 
 def format_fraction(amount):
     try:
@@ -82,7 +79,7 @@ def scale_cooking_time(original_time, new_servings, base=2):
     except Exception:
         scaled_time = original_time * (new_servings / base)
     max_multiplier = 1.7
-    scaled_time = max(original_time, min(scaled_time, original_time * max_multiplier))
+    scaled_time = max(original_time, min(scaled_time, original_time*max_multiplier))
     min_time = 5
     if scaled_time < min_time:
         scaled_time = min_time
