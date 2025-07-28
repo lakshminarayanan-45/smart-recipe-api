@@ -47,7 +47,8 @@
   </div>
 
   <script>
-    const API_KEY = "queenbee@987"; // Replace with your real API key or better use environment variable during build
+    // Hardcoded API key - replace with your secure key or environment variable injection during build
+    const API_KEY = "queenbee@987";
 
     const adjustBtn = document.getElementById("adjustBtn");
     const responseBox = document.getElementById("responseBox");
@@ -61,7 +62,7 @@
         return;
       }
 
-      // Replace this URL with your actual deployed backend URL
+      // Your backend API URL deployed on Render
       const url = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
 
       try {
@@ -81,11 +82,14 @@
 
         if (!res.ok) throw new Error(data.error || "Unknown error");
 
+        // Show the results container
         responseBox.style.display = "block";
 
+        // Populate UI fields
         document.getElementById("recipeTitle").innerText = `${data.recipe} (for ${data.new_servings} servings)`;
         document.getElementById("timeInfo").innerText = `${data.original_time} ➡ ${data.adjusted_time}`;
 
+        // Ingredients list
         const ingredientsDiv = document.getElementById("ingredients");
         ingredientsDiv.innerHTML = "";
         data.ingredients.forEach(i => {
@@ -94,6 +98,7 @@
           ingredientsDiv.innerHTML += `<div class="ingredient">- ${amt}${unit}${i.name}</div>`;
         });
 
+        // Preparation steps
         const stepsDiv = document.getElementById("steps");
         stepsDiv.innerHTML = "";
         data.steps.forEach((step, idx) => {
