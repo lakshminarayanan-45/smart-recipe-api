@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'm
 from scaler import process_recipe_request
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Enable CORS for all domains. Customize if needed.
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -21,7 +21,7 @@ except Exception as e:
     print(f"❌ Failed to load ingredients translation file: {e}")
     ingredient_translations = None
 
-# Load API key from environment variable; Provide a default only for development/testing
+# Load API key from environment variable or fallback to default for dev/testing
 API_KEY = os.environ.get("RECIPE_API_KEY", "queenbee@987")
 
 def check_api_key():
@@ -33,13 +33,13 @@ def check_api_key():
         key = key[7:]
     return key == API_KEY
 
-@app.route("/scale_recipe", methods=["POST"])
+@app.route("/", methods=["GET"])
 def home():
     return jsonify({"message": "Smart Recipe API is running 🚀"})
 
 @app.route("/scale_recipe", methods=["POST"])
 def scale_recipe():
-    # Enforce API key authentication
+    # API key security
     if not check_api_key():
         return jsonify({"error": "Unauthorized: Invalid or missing API key"}), 401
 
@@ -54,12 +54,13 @@ def scale_recipe():
         return jsonify({"error": "Both 'recipe_name' and 'new_servings' are required."}), 400
 
     if ingredient_translations is None:
-        return jsonify({"error": "Translation file not loaded."}), 500
+        return jsonify({"error": "Translation file not loaded on server."}), 500
 
     try:
         result = process_recipe_request(recipe_name, int(new_servings), ingredient_translations)
         return jsonify(result)
     except Exception as e:
+        # Log e if needed
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
