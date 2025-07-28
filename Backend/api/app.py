@@ -33,7 +33,7 @@ def check_api_key():
         key = key[7:]
     return key == API_KEY
 
-@app.route("/", methods=["GET"])
+@app.route("/", methods=["POST"])
 def home():
     return jsonify({"message": "Smart Recipe API is running 🚀"})
 
