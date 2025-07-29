@@ -26,8 +26,12 @@
       margin-right: auto;
       text-align: left;
     }
-    .ingredient, .step {
+    .ingredient, .step, .nutrient {
       margin-bottom: 0.3rem;
+    }
+    .nutrient-list {
+      margin-top: 0.5rem;
+      padding-left: 1rem;
     }
   </style>
 </head>
@@ -44,10 +48,11 @@
     <div id="ingredients"></div>
     <h4>Preparation Steps:</h4>
     <div id="steps"></div>
+    <h4>Nutrition Information:</h4>
+    <div id="nutrition"></div>
   </div>
 
   <script>
-    // Hardcoded API key - replace with your secure key or environment variable injection during build
     const API_KEY = "queenbee@987";
     const adjustBtn = document.getElementById("adjustBtn");
     const responseBox = document.getElementById("responseBox");
@@ -61,15 +66,17 @@
         return;
       }
 
-      // Your backend API URL deployed on Render
-      const url = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
+      // Your backend API URLs
+      const scaleUrl = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
+      const nutritionUrl = "https://smart-recipe-api-ff12.onrender.com/nutrition_info";
 
       try {
-        const res = await fetch(url, {
+        // 1. Fetch scaled recipe data
+        const scaleRes = await fetch(scaleUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-API-KEY": API_KEY  // Send API key transparently
+            "X-API-KEY": API_KEY
           },
           body: JSON.stringify({
             recipe_name: recipe,
@@ -77,32 +84,64 @@
           })
         });
 
-        const data = await res.json();
+        const scaleData = await scaleRes.json();
 
-        if (!res.ok) throw new Error(data.error || "Unknown error");
+        if (!scaleRes.ok) throw new Error(scaleData.error || "Error fetching scaled recipe");
 
-        // Show the results container
+        // 2. Fetch nutrition info
+        // Pass recipe name, optionally lang_code if needed (here defaulting to English)
+        const nutritionRes = await fetch(nutritionUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-KEY": API_KEY
+          },
+          body: JSON.stringify({
+            recipe_name: recipe,
+            // lang_code: "en"  // optionally add language code here if your backend supports it
+          })
+        });
+
+        const nutritionData = await nutritionRes.json();
+
+        if (!nutritionRes.ok) throw new Error(nutritionData.error || "Error fetching nutrition info");
+
+        // Show the response container
         responseBox.style.display = "block";
 
-        // Populate UI fields
-        document.getElementById("recipeTitle").innerText = `${data.recipe} (for ${data.new_servings} servings)`;
-        document.getElementById("timeInfo").innerText = `${data.original_time} ➡ ${data.adjusted_time}`;
+        // Populate UI with scaled recipe info
+        document.getElementById("recipeTitle").innerText = `${scaleData.recipe} (for ${scaleData.new_servings} servings)`;
+        document.getElementById("timeInfo").innerText = `${scaleData.original_time} ➡ ${scaleData.adjusted_time}`;
 
-        // Ingredients list
+        // Ingredients
         const ingredientsDiv = document.getElementById("ingredients");
         ingredientsDiv.innerHTML = "";
-        data.ingredients.forEach(i => {
+        scaleData.ingredients.forEach(i => {
           const amt = i.formattedAmount ? i.formattedAmount + " " : "";
           const unit = i.unit ? i.unit + " " : "";
           ingredientsDiv.innerHTML += `<div class="ingredient">- ${amt}${unit}${i.name}</div>`;
         });
 
-        // Preparation steps
+        // Steps
         const stepsDiv = document.getElementById("steps");
         stepsDiv.innerHTML = "";
-        data.steps.forEach((step, idx) => {
+        scaleData.steps.forEach((step, idx) => {
           stepsDiv.innerHTML += `<div class="step">${idx + 1}. ${step}</div>`;
         });
+
+        // Nutrition
+        const nutritionDiv = document.getElementById("nutrition");
+        nutritionDiv.innerHTML = "";  // Clear previous
+
+        if (nutritionData.nutrition && Object.keys(nutritionData.nutrition).length > 0) {
+          nutritionDiv.innerHTML = '<ul class="nutrient-list">';
+          for (const [nutrient, value] of Object.entries(nutritionData.nutrition)) {
+            nutritionDiv.innerHTML += `<li class="nutrient"><strong>${nutrient}:</strong> ${value}</li>`;
+          }
+          nutritionDiv.innerHTML += '</ul>';
+        } else {
+          nutritionDiv.innerHTML = "<p>No nutrition information available.</p>";
+        }
 
       } catch (error) {
         alert("❌ " + error.message);
