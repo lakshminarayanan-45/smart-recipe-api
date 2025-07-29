@@ -3,7 +3,6 @@ import pandas as pd
 import re
 from thefuzz import process
 
-# Adjust paths according to your backend structure
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
@@ -11,7 +10,6 @@ FOOD_CSV = os.path.join(DATA_DIR, 'food.csv')
 NUTRIENT_CSV = os.path.join(DATA_DIR, 'nutrient.csv')
 FOOD_NUTRIENT_CSV = os.path.join(DATA_DIR, 'food_nutrient.csv')
 
-# Load USDA datasets once
 food_df = pd.read_csv(FOOD_CSV)
 nutrient_df = pd.read_csv(NUTRIENT_CSV)
 food_nutrient_df = pd.read_csv(FOOD_NUTRIENT_CSV, low_memory=False)
@@ -44,14 +42,9 @@ nutrient_name_translations = {
         'Cholesterol': 'கொலஸ்ட்ரால்', 'Sodium': 'சோடியம்',
         'Calcium': 'கால்சியம்', 'Iron': 'இரும்பு', 'Potassium': 'பொட்டாசியம்'
     },
-    'hn': {
-        'Calories': 'कैलोरी', 'Protein': 'प्रोटीन', 'Fat': 'वसा',
-        'Carbohydrates': 'कार्बोहाइड्रेट', 'Fiber': 'रेशा', 'Sugar': 'शुगर',
-        'Cholesterol': 'कोलेस्ट्रॉल', 'Sodium': 'सोडियम',
-        'Calcium': 'कैल्शियम', 'Iron': 'लोहा', 'Potassium': 'पोटैशियम'
-    },
-    # Add other languages similarly if required
+    # Add other languages as required
 }
+
 
 def parse_ingredient_line(line):
     items = [i.strip() for i in re.split(r",|\n", str(line)) if i.strip()]
@@ -73,8 +66,10 @@ def parse_ingredient_line(line):
             })
     return result
 
+
 def translate_nutrient_name(nutrient, lang_code):
     return nutrient_name_translations.get(lang_code, {}).get(nutrient, nutrient)
+
 
 def convert_to_grams(qty, unit):
     u = unit.lower()
@@ -91,9 +86,11 @@ def convert_to_grams(qty, unit):
     else:
         return qty  # treat unknown as grams
 
+
 def fuzzy_match(ingredient, choices, threshold=60):
     result = process.extractOne(ingredient, choices, score_cutoff=threshold)
     return result[0] if result else None
+
 
 def get_nutrition(ingredient, quantity, unit):
     cleaned_name = ingredient.lower().strip()
@@ -125,6 +122,7 @@ def get_nutrition(ingredient, quantity, unit):
             name = name_alias.get(info['name'], info['name'])
             result[name] = result.get(name, 0.0) + value
     return result
+
 
 def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_override=None):
     sheet_name, lang_col, lang_code, match_df = detect_language_func(recipe_name)
