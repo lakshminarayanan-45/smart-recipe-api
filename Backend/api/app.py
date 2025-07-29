@@ -4,10 +4,9 @@ import os
 import sys
 from flask_cors import CORS
 
-# Append models path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models')))
-from scaler import process_recipe_request, detect_language  # import detect_language function
-from nutrition import get_nutrition_for_recipe  # import nutrition function
+from scaler import process_recipe_request, detect_language
+from nutrition import get_nutrition_for_recipe
 
 app = Flask(__name__)
 CORS(app)
@@ -68,16 +67,16 @@ def nutrition_info():
         return jsonify({"error": "Missing JSON body"}), 400
 
     recipe_name = data.get("recipe_name")
-    lang_code = data.get("lang_code")  # optional
+    lang_code = data.get("lang_code")
 
     if not recipe_name:
         return jsonify({"error": "'recipe_name' is required."}), 400
 
     try:
-        nutrition_data = get_nutrition_for_recipe(recipe_name, detect_language, lang_code_override=lang_code)
+        result = get_nutrition_for_recipe(recipe_name, detect_language, lang_code_override=lang_code)
         return jsonify({
             "recipe": recipe_name,
-            "nutrition": nutrition_data,
+            "nutrition": result,
             "language_detected": lang_code or "en"
         })
     except Exception as e:
