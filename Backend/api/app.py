@@ -7,6 +7,8 @@ from flask_cors import CORS
 # Ensure models folder is accessible
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models')))
 from scaler import process_recipe_request
+from nutrition import get_nutrition_for_recipe  # new nutrition module import
+from scaler import detect_language  # assuming detect_language is inside scaler.py or import accordingly
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all domains. Customize if needed.
@@ -21,7 +23,7 @@ except Exception as e:
     print(f"❌ Failed to load ingredients translation file: {e}")
     ingredient_translations = None
 
-# Load API key from environment variable or fallback to default for dev/testing
+# Load API key from environment variable (no fallback, enforce presence)
 API_KEY = os.environ.get("RECIPE_API_KEY")
 if not API_KEY:
     raise RuntimeError("RECIPE_API_KEY environment variable not set! Please configure it in your deployment.")
@@ -36,9 +38,11 @@ def check_api_key():
         key = key[7:]
     return key == API_KEY
 
+
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"message": "Smart Recipe API is running 🚀"})
+
 
 @app.route("/scale_recipe", methods=["POST"])
 def scale_recipe():
@@ -63,8 +67,36 @@ def scale_recipe():
         result = process_recipe_request(recipe_name, int(new_servings), ingredient_translations)
         return jsonify(result)
     except Exception as e:
-        # Log e if needed
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/nutrition_info", methods=["POST"])
+def nutrition_info():
+    # API key security
+    if not check_api_key():
+        return jsonify({"error": "Unauthorized: Invalid or missing API key"}), 401
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    recipe_name = data.get("recipe_name")
+    lang_code = data.get("lang_code")  # optional: to support nutrient translation
+
+    if not recipe_name:
+        return jsonify({"error": "'recipe_name' is required."}), 400
+
+    try:
+        # Call nutrition module function; pass detect_language function for recipe language detection
+        nutrition_data = get_nutrition_for_recipe(recipe_name, detect_language, lang_code_override=lang_code)
+        return jsonify({
+            "recipe": recipe_name,
+            "nutrition": nutrition_data,
+            "language_detected": lang_code or "en"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
