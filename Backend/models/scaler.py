@@ -1,24 +1,42 @@
 import os
 import pandas as pd
 import re
-
-from models.translator import detect_language
-from models.rewriter import rewrite_instructions_with_quantity
-from models.parser import (
-    parse_ingredient_line,
-    format_fraction,
-    scale_cooking_time,
-)
-
 from math import log
 from difflib import get_close_matches
 
+# Adjust the import path or move detect_language in same file if needed
+# Here, assume detect_language is in the same file for completeness.
+# Or import it if you prefer it elsewhere.
+
+# Assuming you put the detect_language here for self-containment:
+def detect_language(all_sheets, recipe_name):
+    LANGUAGE_SUFFIX = {
+        "TamilName": "ta", "hindiName": "hn", "malayalamName": "kl",
+        "kannadaName": "kn", "teluguName": "te", "frenchName": "french",
+        "spanishName": "spanish", "germanName": "german"
+    }
+    for sheet_name, df in all_sheets.items():
+        for lang_col in LANGUAGE_SUFFIX:
+            if lang_col in df.columns:
+                match = df[df[lang_col].astype(str).str.lower().str.strip() == recipe_name.lower()]
+                if not match.empty:
+                    return sheet_name, lang_col, LANGUAGE_SUFFIX[lang_col], match
+        for col in ["name", "Name"]:
+            if col in df.columns:
+                match = df[df[col].astype(str).str.lower().str.strip() == recipe_name.lower()]
+                if not match.empty:
+                    return sheet_name, col, "en", match
+    return None, None, None, None
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
-RECIPE_DATA_PATH = os.path.join(BASE_DIR, "data", "recipe_data.xlsx")
-TRANSLATION_PATH = os.path.join(BASE_DIR, "data", "ingredients_translation.xlsx")
+DATA_DIR = os.path.join(BASE_DIR, "data")
+RECIPE_DATA_PATH = os.path.join(DATA_DIR, "Recipe App Dataset.xlsx")
+TRANSLATION_PATH = os.path.join(DATA_DIR, "ingredients_translation.xlsx")
 
 all_sheets = pd.read_excel(RECIPE_DATA_PATH, sheet_name=None, engine='openpyxl')
 translation_df = pd.read_excel(TRANSLATION_PATH, engine='openpyxl')
+
 
 def build_scale_lookup(df):
     scale_lookup = {}
@@ -29,7 +47,10 @@ def build_scale_lookup(df):
             scale_lookup[en_name] = scale_type
     return scale_lookup
 
+
 SCALE_LOOKUP = build_scale_lookup(translation_df)
+BASE_SERVINGS = 2
+
 
 def get_scale_type(ingredient_name):
     norm = ingredient_name.lower()
@@ -46,6 +67,7 @@ def get_scale_type(ingredient_name):
     if matches:
         return SCALE_LOOKUP[matches[0]]
     return "LINEAR"
+
 
 def combine_names(original, translated):
     original_lower = original.lower()
@@ -64,7 +86,6 @@ def combine_names(original, translated):
             combined.append(token)
     return " ".join(combined)
 
-BASE_SERVINGS = 2
 
 def scale_ingredient(item, servings, base=BASE_SERVINGS):
     name = item["name"]
@@ -78,7 +99,7 @@ def scale_ingredient(item, servings, base=BASE_SERVINGS):
         else:
             try:
                 scaled = qty * (log(servings) / log(base))
-            except Exception:
+            except (ValueError, ZeroDivisionError):
                 scaled = qty * (servings / base)
     else:
         scaled = qty * (servings / base)
@@ -87,6 +108,62 @@ def scale_ingredient(item, servings, base=BASE_SERVINGS):
         "amount": round(scaled, 2),
         "formattedAmount": format_fraction(scaled) if scaled > 0 else ""
     }
+
+
+def format_fraction(x):
+    # Format decimal numbers as fractions for user-friendly display (simple example)
+    if abs(x - int(x)) < 1e-6:
+        return str(int(x))
+    from fractions import Fraction
+    f = Fraction(x).limit_denominator(8)
+    return f"{f.numerator}/{f.denominator}"
+
+
+def scale_cooking_time(original_time, new_servings, base_servings):
+    # Try to scale time linearly
+    try:
+        if isinstance(original_time, (int, float)):
+            return round(original_time * new_servings / base_servings)
+        # Try to parse time string containing digits, e.g. "20 minutes"
+        import re
+        m = re.search(r"(\d+)", str(original_time))
+        if m:
+            time_val = int(m.group(1))
+            scaled_time = round(time_val * new_servings / base_servings)
+            return f"{scaled_time} minutes"
+        return original_time
+    except Exception:
+        return original_time
+
+
+def parse_ingredient_line(text):
+    items = [i.strip() for i in re.split(r",|\n", str(text)) if i.strip()]
+    result = []
+    for item in items:
+        match = re.match(r"([\d\.\/]+)?\s*([a-zA-Z]+)?\s(.+)", item)
+        if match:
+            qty_text = match.group(1)
+            try:
+                amount = eval(qty_text) if qty_text else 1
+            except Exception:
+                amount = 1
+            unit = match.group(2) if match.group(2) else ""
+            name = match.group(3).strip()
+            result.append({
+                "amount": amount,
+                "unit": unit.strip(),
+                "name": name,
+                "formattedAmount": format_fraction(amount) if amount > 0 else "",
+            })
+    return result
+
+
+def rewrite_instructions_with_quantity(steps, scaled_ingredients, new_servings):
+    # This should be your existing implementation or a simple placeholder.
+    # Return steps unchanged for now:
+    # (You can add logic to adjust quantities in instructions based on scaled ingredients.)
+    return steps
+
 
 def process_recipe_request(recipe_name: str, new_servings: int, translation_df: pd.DataFrame):
     sheet_name, lang_col, lang_code, df_row = detect_language(all_sheets, recipe_name)
@@ -137,8 +214,8 @@ def process_recipe_request(recipe_name: str, new_servings: int, translation_df: 
         "recipe": title,
         "original_servings": BASE_SERVINGS,
         "new_servings": new_servings,
-        "original_time": f"{original_time}",
-        "adjusted_time": f"{adjusted_time} minutes",
+        "original_time": str(original_time),
+        "adjusted_time": str(adjusted_time) if isinstance(adjusted_time, str) else f"{adjusted_time} minutes",
         "ingredients": [
             {
                 "name": ing["name"],
