@@ -10,6 +10,7 @@ FOOD_CSV = os.path.join(DATA_DIR, 'food.csv')
 NUTRIENT_CSV = os.path.join(DATA_DIR, 'nutrient.csv')
 FOOD_NUTRIENT_CSV = os.path.join(DATA_DIR, 'food_nutrient.csv')
 
+# Load USDA datasets once
 food_df = pd.read_csv(FOOD_CSV)
 nutrient_df = pd.read_csv(NUTRIENT_CSV)
 food_nutrient_df = pd.read_csv(FOOD_NUTRIENT_CSV, low_memory=False)
@@ -42,8 +43,19 @@ nutrient_name_translations = {
         'Cholesterol': 'கொலஸ்ட்ரால்', 'Sodium': 'சோடியம்',
         'Calcium': 'கால்சியம்', 'Iron': 'இரும்பு', 'Potassium': 'பொட்டாசியம்'
     },
-    # Add other languages as required
+    # Add other languages here as needed
 }
+
+
+def clean_ingredient_name(name):
+    """Clean and normalize ingredient names by removing punctuation and common extra words."""
+    name = name.lower().strip()
+    name = re.sub(r'[^\w\s]', '', name)  # remove punctuation
+    # Remove common unhelpful words if desired; you can extend this list
+    stop_words = ['powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped', 'sliced', 'diced']
+    for stop_word in stop_words:
+        name = name.replace(stop_word, '')
+    return name.strip()
 
 
 def parse_ingredient_line(line):
@@ -58,10 +70,11 @@ def parse_ingredient_line(line):
             except Exception:
                 amount = 1
             unit = match.group(2) if match.group(2) else ""
+            name = match.group(3).strip()
             result.append({
                 "amount": amount,
                 "unit": unit.strip(),
-                "name": match.group(3).strip(),
+                "name": name,
                 "formattedAmount": f"{round(amount, 2)}"
             })
     return result
@@ -87,14 +100,16 @@ def convert_to_grams(qty, unit):
         return qty  # treat unknown as grams
 
 
-def fuzzy_match(ingredient, choices, threshold=60):
+def fuzzy_match(ingredient, choices, threshold=50):
+    # Lower threshold for more permissive matching
     result = process.extractOne(ingredient, choices, score_cutoff=threshold)
     return result[0] if result else None
 
 
 def get_nutrition(ingredient, quantity, unit):
-    cleaned_name = ingredient.lower().strip()
+    cleaned_name = clean_ingredient_name(ingredient)
     best_match = fuzzy_match(cleaned_name, food_df['desc_clean'])
+    print(f"Looking for ingredient '{ingredient}' cleaned as '{cleaned_name}'; matched with '{best_match}'")  # Debug log
     if not best_match:
         return {}
     matched_rows = food_df[food_df['desc_clean'] == best_match]
@@ -107,6 +122,7 @@ def get_nutrition(ingredient, quantity, unit):
             best_score = count
             best_fdc_id = fid
     if not best_fdc_id:
+        print(f"No nutrient data found for best match '{best_match}'")
         return {}
 
     f_nutr = food_nutrient_df[food_nutrient_df['fdc_id'] == best_fdc_id]
@@ -162,4 +178,5 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
         translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}"
         for k, v in total_nutrition.items()
     }
+    print(f"Total nutrition for recipe '{recipe_name}': {translated_nutrition}")  # Debug log
     return translated_nutrition
