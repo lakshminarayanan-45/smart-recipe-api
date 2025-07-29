@@ -3,14 +3,16 @@ import pandas as pd
 import re
 from thefuzz import process
 
+# === Paths (adjust if needed) ===
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
+RECIPE_XLSX_PATH = os.path.join(DATA_DIR, "recipe_data.xlsx")  # Adjust name if different
 
 FOOD_CSV = os.path.join(DATA_DIR, 'food.csv')
 NUTRIENT_CSV = os.path.join(DATA_DIR, 'nutrient.csv')
 FOOD_NUTRIENT_CSV = os.path.join(DATA_DIR, 'food_nutrient.csv')
 
-# Load USDA datasets once
+# === Load USDA datasets once at module load ===
 food_df = pd.read_csv(FOOD_CSV)
 nutrient_df = pd.read_csv(NUTRIENT_CSV)
 food_nutrient_df = pd.read_csv(FOOD_NUTRIENT_CSV, low_memory=False)
@@ -43,24 +45,48 @@ nutrient_name_translations = {
         'Cholesterol': 'கொலஸ்ட்ரால்', 'Sodium': 'சோடியம்',
         'Calcium': 'கால்சியம்', 'Iron': 'இரும்பு', 'Potassium': 'பொட்டாசியம்'
     },
-    # Add other languages here as needed
+    # Add other languages as needed
 }
 
+# === Load recipe Excel datasets globally ===
+all_sheets = pd.read_excel(RECIPE_XLSX_PATH, sheet_name=None, engine='openpyxl')
+
+# === Manual mappings for common unmatched ingredients ===
+manual_ingredient_mapping = {
+    "jaggery": "brown sugar",
+    "ghee": "butter oil",
+    "red chilli powder": "red pepper",
+    "cinnamon stick": "cinnamon",
+    "cardamom pods": "cardamom",
+    "cumin powder": "cumin",
+    "garam masala powder": "curry powder",
+    # Add more mappings as you discover unmatched ingredients
+}
 
 def clean_ingredient_name(name):
-    """Clean and normalize ingredient names by removing punctuation and common extra words."""
+    """Clean and normalize ingredient names."""
+    if not name:
+        return ""
     name = name.lower().strip()
     name = re.sub(r'[^\w\s]', '', name)  # remove punctuation
-    # Remove common unhelpful words if desired; you can extend this list
-    stop_words = ['powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped', 'sliced', 'diced']
-    for stop_word in stop_words:
-        name = name.replace(stop_word, '')
-    return name.strip()
+    stop_words = ['powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped', 
+                  'sliced', 'diced', 'stick', 'pods']
+    for sw in stop_words:
+        name = name.replace(sw, '')
+    name = re.sub(r'\s+', ' ', name).strip()  # normalize whitespace
+    
+    # Apply manual mapping if ingredient matches
+    if name in manual_ingredient_mapping:
+        mapped = manual_ingredient_mapping[name]
+        print(f"Manual map: '{name}' -> '{mapped}'")
+        return mapped
+    return name
 
 
 def parse_ingredient_line(line):
+    """Parse ingredient text to list of dicts with amount, unit, name."""
     items = [i.strip() for i in re.split(r",|\n", str(line)) if i.strip()]
-    result = []
+    parsed_items = []
     for item in items:
         match = re.match(r"([\d\.\/]+)?\s*([a-zA-Z]+)?\s(.+)", item)
         if match:
@@ -71,13 +97,13 @@ def parse_ingredient_line(line):
                 amount = 1
             unit = match.group(2) if match.group(2) else ""
             name = match.group(3).strip()
-            result.append({
+            parsed_items.append({
                 "amount": amount,
                 "unit": unit.strip(),
                 "name": name,
                 "formattedAmount": f"{round(amount, 2)}"
             })
-    return result
+    return parsed_items
 
 
 def translate_nutrient_name(nutrient, lang_code):
@@ -97,11 +123,10 @@ def convert_to_grams(qty, unit):
     elif u in ['oz', 'ounce', 'ounces']:
         return qty * 28.3495
     else:
-        return qty  # treat unknown as grams
+        return qty  # fallback: treat unknown as grams
 
 
 def fuzzy_match(ingredient, choices, threshold=50):
-    # Lower threshold for more permissive matching
     result = process.extractOne(ingredient, choices, score_cutoff=threshold)
     return result[0] if result else None
 
@@ -109,7 +134,7 @@ def fuzzy_match(ingredient, choices, threshold=50):
 def get_nutrition(ingredient, quantity, unit):
     cleaned_name = clean_ingredient_name(ingredient)
     best_match = fuzzy_match(cleaned_name, food_df['desc_clean'])
-    print(f"Looking for ingredient '{ingredient}' cleaned as '{cleaned_name}'; matched with '{best_match}'")  # Debug log
+    print(f"Looking for '{ingredient}' cleaned as '{cleaned_name}'; matched with '{best_match}'")  # Debug
     if not best_match:
         return {}
     matched_rows = food_df[food_df['desc_clean'] == best_match]
@@ -122,12 +147,12 @@ def get_nutrition(ingredient, quantity, unit):
             best_score = count
             best_fdc_id = fid
     if not best_fdc_id:
-        print(f"No nutrient data found for best match '{best_match}'")
+        print(f"No nutrient data for '{best_match}'")
         return {}
 
     f_nutr = food_nutrient_df[food_nutrient_df['fdc_id'] == best_fdc_id]
     grams = convert_to_grams(quantity, unit)
-    scale = grams / 100.0
+    scale = grams / 100.0  # USDA data is per 100g
     result = {}
 
     for _, row in f_nutr.iterrows():
@@ -178,5 +203,5 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
         translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}"
         for k, v in total_nutrition.items()
     }
-    print(f"Total nutrition for recipe '{recipe_name}': {translated_nutrition}")  # Debug log
+    print(f"Total nutrition for '{recipe_name}': {translated_nutrition}")
     return translated_nutrition
