@@ -22,7 +22,10 @@ except Exception as e:
     ingredient_translations = None
 
 # Load API key from environment variable or fallback to default for dev/testing
-API_KEY = os.environ.get("RECIPE_API_KEY", "queenbee@987")
+API_KEY = os.environ.get("RECIPE_API_KEY")
+if not API_KEY:
+    raise RuntimeError("RECIPE_API_KEY environment variable not set! Please configure it in your deployment.")
+
 
 def check_api_key():
     """
