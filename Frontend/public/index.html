@@ -48,8 +48,7 @@
 
   <script>
     // Hardcoded API key - replace with your secure key or environment variable injection during build
-    const API_KEY = "queenbee@987";
-
+    const API_KEY = import.meta.env.VITE_RECIPE_API_KEY;
     const adjustBtn = document.getElementById("adjustBtn");
     const responseBox = document.getElementById("responseBox");
 
