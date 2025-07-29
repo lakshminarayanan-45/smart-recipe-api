@@ -31,7 +31,7 @@ def detect_language(all_sheets, recipe_name):
 
 BASE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, '..')))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-RECIPE_DATA_PATH = os.path.join(DATA_DIR, "Recipe App Dataset.xlsx")
+RECIPE_DATA_PATH = os.path.join(DATA_DIR, "recipe_data.xlsx")
 TRANSLATION_PATH = os.path.join(DATA_DIR, "ingredients_translation.xlsx")
 
 all_sheets = pd.read_excel(RECIPE_DATA_PATH, sheet_name=None, engine='openpyxl')
