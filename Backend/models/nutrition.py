@@ -14,7 +14,7 @@ food_df = pd.read_csv(FOOD_CSV)
 nutrient_df = pd.read_csv(NUTRIENT_CSV)
 food_nutrient_df = pd.read_csv(FOOD_NUTRIENT_CSV, low_memory=False)
 
-print(f"[Nutrition] FDA datasets: food: {len(food_df)}, nutrient: {len(nutrient_df)}, food_nutrient: {len(food_nutrient_df)}")
+print(f"[Nutrition] Loaded datasets: food={len(food_df)} rows, nutrient={len(nutrient_df)} rows, food_nutrient={len(food_nutrient_df)} rows")
 
 food_df['desc_clean'] = food_df['description'].str.lower().str.strip()
 nutrient_df = nutrient_df[nutrient_df['rank'] != 999999].copy()
@@ -44,10 +44,10 @@ nutrient_name_translations = {
         'Cholesterol': 'கொலஸ்ட்ரால்', 'Sodium': 'சோடியம்',
         'Calcium': 'கால்சியம்', 'Iron': 'இரும்பு', 'Potassium': 'பொட்டாசியம்'
     },
-    # Add more if needed
+    # Add other languages as needed
 }
 
-# Manual mappings for common unmatched or regional ingredients
+# Manual mappings from common regional ingredients to USDA descriptions
 manual_ingredient_mapping = {
     "jaggery": "brown sugar",
     "ghee": "butter oil",
@@ -64,38 +64,43 @@ manual_ingredient_mapping = {
     "tomatoes": "tomatoes, red, ripe, raw, year round average",
     "cloves": "spices, cloves",
     "salt": "salt, table",
-    "water": None,  # Skip, water has negligible nutrients
+    "water": None,  # Usually negligible nutrition
     "coriander leaves": "cilantro",
     "cardamom": "spices, cardamom",
     "cinnamon": "spices, cinnamon",
     "chilli": "spices, chili powder",
     "chili": "spices, chili powder",
     "red chillie powder": "spices, chili powder",
-    # Add more as you see unmatched ingredients
+    # Add more as you discover unmatched ingredients
 }
 
 def clean_ingredient_name(name):
     if not name:
         return ""
     name = name.lower().strip()
-    name = re.sub(r'[^\w\s]', '', name)  # remove punctuation
+    # Remove punctuation
+    name = re.sub(r'[^\w\s]', '', name)
+    # Remove unhelpful descriptive words
     stop_words = [
-        'powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped',
-        'sliced', 'diced', 'stick', 'pods', 'large', 'for garnishing', 'paste'
+        'powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped', 'sliced',
+        'diced', 'stick', 'pods', 'large', 'for garnishing', 'paste'
     ]
     for sw in stop_words:
         name = name.replace(sw, '')
     name = re.sub(r'\s+', ' ', name).strip()
-    # Apply manual mapping if available
+    # Apply manual mapping
     if name in manual_ingredient_mapping:
         mapped = manual_ingredient_mapping[name]
-        print(f"[Nutrition] Manual map: '{name}' -> '{mapped}'")
+        if mapped is None:
+            print(f"[Nutrition] Ingredient '{name}' mapped to None (ignored)")
+            return None
+        print(f"[Nutrition] Ingredient '{name}' manually mapped to '{mapped}'")
         return mapped
     return name
 
 def parse_ingredient_line(line):
     items = [i.strip() for i in re.split(r",|\n", str(line)) if i.strip()]
-    parsed_items = []
+    result = []
     for item in items:
         match = re.match(r"([\d\.\/]+)?\s*([a-zA-Z]+)?\s(.+)", item)
         if match:
@@ -106,20 +111,19 @@ def parse_ingredient_line(line):
                 amount = 1
             unit = match.group(2) if match.group(2) else ""
             name = match.group(3).strip()
-            parsed_items.append({
+            result.append({
                 "amount": amount,
                 "unit": unit.strip(),
                 "name": name,
                 "formattedAmount": f"{round(amount, 2)}"
             })
-    return parsed_items
+    return result
 
 def translate_nutrient_name(nutrient, lang_code):
     return nutrient_name_translations.get(lang_code, {}).get(nutrient, nutrient)
 
 def convert_to_grams(qty, unit):
     u = unit.lower()
-    # Add common cooking units
     if u in ['g', 'gram', 'grams']:
         return qty
     elif u in ['kg', 'kilogram', 'kilograms']:
@@ -131,51 +135,49 @@ def convert_to_grams(qty, unit):
     elif u in ['oz', 'ounce', 'ounces']:
         return qty * 28.3495
     elif u in ['tbsp', 'tablespoon', 'tablespoons']:
-        return qty * 14.2
+        return qty * 15
     elif u in ['tsp', 'teaspoon', 'teaspoons']:
-        return qty * 4.7
+        return qty * 5
     elif u in ['cup', 'cups']:
         return qty * 240
     elif u in ['pcs', 'piece', 'pieces', 'unit', 'units']:
         return qty * 50
     else:
-        print(f"[Nutrition] Unknown unit '{unit}', treating {qty} as grams.")
+        print(f"[Nutrition] Unknown unit '{unit}', treating {qty} as grams")
         return qty
 
 def fuzzy_match(ingredient, choices, threshold=50):
-    # Return best matched candidate
-    results = process.extract(ingredient, choices, limit=3)
-    if results:
-        print(f"[Nutrition] Top USDA matches for '{ingredient}': {results}")
-    result = [r for r in results if r[1] >= threshold]
-    return result[0][0] if result else None
+    candidates = process.extract(ingredient, choices, limit=5)
+    print(f"[Nutrition] Candidates for '{ingredient}': {candidates}")
+    matches = [c for c in candidates if c[1] >= threshold]
+    if matches:
+        return matches[0][0]
+    print(f"[Nutrition] No fuzzy match above threshold for '{ingredient}'")
+    return None
 
 def get_nutrition(ingredient, quantity, unit):
     cleaned_name = clean_ingredient_name(ingredient)
     if cleaned_name is None:
-        print(f"[Nutrition] Ingredient '{ingredient}' intentionally skipped.")
+        # Intentionally skip
         return {}
     best_match = fuzzy_match(cleaned_name, food_df['desc_clean'])
-    print(f"[Nutrition] Ingredient '{ingredient}' cleaned as '{cleaned_name}'; matched with '{best_match}'")
     if not best_match:
-        print(f"[Nutrition] No USDA match found for '{cleaned_name}'")
+        print(f"[Nutrition] No USDA match for '{ingredient}' cleaned '{cleaned_name}'")
         return {}
     matched_rows = food_df[food_df['desc_clean'] == best_match]
-    best_fdc_id = None
-    best_score = 0
+    best_fdc_id, best_score = None, 0
     for fid in matched_rows['fdc_id'].values:
         f_nutr = food_nutrient_df[food_nutrient_df['fdc_id'] == fid]
-        count = sum(1 for _, r in f_nutr.iterrows() if nutrient_map.get(r['nutrient_id'], {}).get('name') in focus_nutrients)
-        if count > best_score:
-            best_score = count
-            best_fdc_id = fid
+        score = sum(1 for _, r in f_nutr.iterrows() if nutrient_map.get(r['nutrient_id'], {}).get('name') in focus_nutrients)
+        if score > best_score:
+            best_fdc_id, best_score = fid, score
     if not best_fdc_id:
-        print(f"[Nutrition] No nutrient data for '{best_match}'")
+        print(f"[Nutrition] No nutrient data found for '{best_match}'")
         return {}
 
     f_nutr = food_nutrient_df[food_nutrient_df['fdc_id'] == best_fdc_id]
     grams = convert_to_grams(quantity, unit)
-    scale = grams / 100.0  # All nutrients per 100g
+    scale = grams / 100.0
     result = {}
     for _, row in f_nutr.iterrows():
         nid = row['nutrient_id']
@@ -191,11 +193,9 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
     sheet_name, lang_col, lang_code, match_df = detect_language_func(recipe_name)
     if match_df is None or match_df.empty:
         raise ValueError(f"Recipe '{recipe_name}' not found.")
-
     row = match_df.iloc[0]
     if lang_code_override:
         lang_code = lang_code_override
-
     ingredient_col = None
     for col in row.index:
         if 'ingredient' in col.lower() and 'english' in col.lower():
@@ -206,11 +206,9 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
             ingredient_col = 'ingredients_en'
         else:
             return {}
-
     ingredient_text = str(row[ingredient_col])
     ingredient_lines = [x.strip() for x in re.split(r",|\n", ingredient_text) if x.strip()]
     total_nutrition = {}
-
     for line in ingredient_lines:
         parsed = parse_ingredient_line(line)
         if not parsed:
@@ -219,10 +217,6 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
         nut = get_nutrition(p['name'], p['amount'], p['unit'])
         for k, v in nut.items():
             total_nutrition[k] = total_nutrition.get(k, 0.0) + v
-
-    translated_nutrition = {
-        translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}"
-        for k, v in total_nutrition.items()
-    }
+    translated_nutrition = {translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}" for k, v in total_nutrition.items()}
     print(f"[Nutrition] Total nutrition for '{recipe_name}': {translated_nutrition}")
     return translated_nutrition
