@@ -47,7 +47,6 @@ nutrient_name_translations = {
     # Add other languages as needed
 }
 
-# Manual mappings from common regional ingredients to USDA descriptions
 manual_ingredient_mapping = {
     "jaggery": "brown sugar",
     "ghee": "butter oil",
@@ -64,23 +63,20 @@ manual_ingredient_mapping = {
     "tomatoes": "tomatoes, red, ripe, raw, year round average",
     "cloves": "spices, cloves",
     "salt": "salt, table",
-    "water": None,  # Usually negligible nutrition
+    "water": None,
     "coriander leaves": "cilantro",
     "cardamom": "spices, cardamom",
     "cinnamon": "spices, cinnamon",
     "chilli": "spices, chili powder",
     "chili": "spices, chili powder",
     "red chillie powder": "spices, chili powder",
-    # Add more as you discover unmatched ingredients
 }
 
 def clean_ingredient_name(name):
     if not name:
         return ""
     name = name.lower().strip()
-    # Remove punctuation
     name = re.sub(r'[^\w\s]', '', name)
-    # Remove unhelpful descriptive words
     stop_words = [
         'powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped', 'sliced',
         'diced', 'stick', 'pods', 'large', 'for garnishing', 'paste'
@@ -88,13 +84,12 @@ def clean_ingredient_name(name):
     for sw in stop_words:
         name = name.replace(sw, '')
     name = re.sub(r'\s+', ' ', name).strip()
-    # Apply manual mapping
     if name in manual_ingredient_mapping:
         mapped = manual_ingredient_mapping[name]
         if mapped is None:
             print(f"[Nutrition] Ingredient '{name}' mapped to None (ignored)")
             return None
-        print(f"[Nutrition] Ingredient '{name}' manually mapped to '{mapped}'")
+        print(f"[Nutrition] Ingredient '{name}' mapped to '{mapped}'")
         return mapped
     return name
 
@@ -158,9 +153,9 @@ def fuzzy_match(ingredient, choices, threshold=50):
 def get_nutrition(ingredient, quantity, unit):
     cleaned_name = clean_ingredient_name(ingredient)
     if cleaned_name is None:
-        # Intentionally skip
         return {}
     best_match = fuzzy_match(cleaned_name, food_df['desc_clean'])
+    print(f"[Nutrition] Ingredient '{ingredient}' cleaned as '{cleaned_name}'; matched with '{best_match}'")
     if not best_match:
         print(f"[Nutrition] No USDA match for '{ingredient}' cleaned '{cleaned_name}'")
         return {}
