@@ -4,11 +4,11 @@ import os
 import sys
 from flask_cors import CORS
 
-# Add models folder to path
+# Append models directory to import path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models')))
 
-# Import necessary functions and variables
-from scaler import process_recipe_request, detect_language, all_sheets  # Import all_sheets for wrapper
+# Import scaling and nutrition functions and variables
+from scaler import process_recipe_request, detect_language, all_sheets
 from nutrition import get_nutrition_for_recipe
 
 app = Flask(__name__)
@@ -18,25 +18,28 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 TRANSLATION_FILE = os.path.join(DATA_DIR, "ingredients_translation.xlsx")
 
+# Load ingredient translations file for scaling
 try:
     ingredient_translations = pd.read_excel(TRANSLATION_FILE, engine='openpyxl')
 except Exception as e:
-    print(f"❌ Failed to load ingredients translation file: {e}")
+    print(f"❌ Failed to load ingredient translation file: {e}")
     ingredient_translations = None
 
+# Mandatory API key environment variable
 API_KEY = os.environ.get("RECIPE_API_KEY")
 if not API_KEY:
-    raise RuntimeError("RECIPE_API_KEY environment variable not set! Please configure it in your deployment.")
+    raise RuntimeError("RECIPE_API_KEY environment variable not set! Please configure it in your environment.")
 
 
 def check_api_key():
+    """Check API key from 'X-API-KEY' header or 'Authorization' Bearer."""
     key = request.headers.get("X-API-KEY") or request.headers.get("Authorization")
     if key and key.lower().startswith("bearer "):
         key = key[7:]
     return key == API_KEY
 
 
-# Wrapper to pass all_sheets to detect_language with expected signature
+# Wrapper to provide all_sheets to detect_language with the expected signature
 def detect_language_wrapper(recipe_name):
     return detect_language(all_sheets, recipe_name)
 
@@ -57,8 +60,10 @@ def scale_recipe():
 
     recipe_name = data.get("recipe_name")
     new_servings = data.get("new_servings")
+
     if not recipe_name or not new_servings:
         return jsonify({"error": "Both 'recipe_name' and 'new_servings' are required."}), 400
+
     if ingredient_translations is None:
         return jsonify({"error": "Translation file not loaded on server."}), 500
 
@@ -85,11 +90,11 @@ def nutrition_info():
         return jsonify({"error": "'recipe_name' is required."}), 400
 
     try:
-        # Use the wrapper here to fix the argument error
-        result = get_nutrition_for_recipe(recipe_name, detect_language_wrapper, lang_code_override=lang_code)
+        # Use the wrapper to provide all_sheets to detect_language
+        nutrition_data = get_nutrition_for_recipe(recipe_name, detect_language_wrapper, lang_code_override=lang_code)
         return jsonify({
             "recipe": recipe_name,
-            "nutrition": result,
+            "nutrition": nutrition_data,
             "language_detected": lang_code or "en"
         })
     except Exception as e:
