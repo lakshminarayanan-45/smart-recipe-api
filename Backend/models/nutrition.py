@@ -49,22 +49,22 @@ nutrient_name_translations = {
 
 manual_ingredient_mapping = {
     "jaggery": "brown sugar",
-    "ghee": "butter oil",
+    "ghee": "butter, clarified",
     "red chilli powder": "spices, chili powder",
     "cinnamon stick": "spices, cinnamon",
+    "cloves": "spices, cloves",
     "cardamom pods": "spices, cardamom",
     "cumin powder": "spices, cumin seed",
     "garam masala powder": "spices, curry powder",
     "chicken": "chicken, broilers or fryers, meat only, raw",
     "oil": "oil, vegetable",
     "onions": "onions, raw",
-    "ginger garlic paste": "garlic",
+    "ginger garlic paste": "garlic, raw",
     "turmeric powder": "spices, turmeric, ground",
     "tomatoes": "tomatoes, red, ripe, raw, year round average",
-    "cloves": "spices, cloves",
     "salt": "salt, table",
     "water": None,
-    "coriander leaves": "cilantro",
+    "coriander leaves": "cilantro, raw",
     "cardamom": "spices, cardamom",
     "cinnamon": "spices, cinnamon",
     "chilli": "spices, chili powder",
@@ -203,7 +203,10 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
             return {}
     ingredient_text = str(row[ingredient_col])
     ingredient_lines = [x.strip() for x in re.split(r",|\n", ingredient_text) if x.strip()]
+
     total_nutrition = {}
+    per_ingredient_nutrition = {}  # <--- NEW
+
     for line in ingredient_lines:
         parsed = parse_ingredient_line(line)
         if not parsed:
@@ -212,6 +215,24 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
         nut = get_nutrition(p['name'], p['amount'], p['unit'])
         for k, v in nut.items():
             total_nutrition[k] = total_nutrition.get(k, 0.0) + v
-    translated_nutrition = {translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}" for k, v in total_nutrition.items()}
+        per_ingredient_nutrition[p['name']] = nut   # <--- NEW
+
+    # format for output
+    translated_nutrition = {
+        translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}"
+        for k, v in total_nutrition.items()
+    }
+    per_ingredient_translated = {}
+    for ing, nut_dict in per_ingredient_nutrition.items():
+        per_ingredient_translated[ing] = {
+            translate_nutrient_name(k, lang_code): f"{round(v,2)} {'kcal' if k=='Calories' else 'g'}"
+            for k,v in nut_dict.items()
+        }
+
+    # Output both per-ingredient and total nutrition
+    print(f"[Nutrition] Per-ingredient nutrition: {per_ingredient_translated}")
     print(f"[Nutrition] Total nutrition for '{recipe_name}': {translated_nutrition}")
-    return translated_nutrition
+    return {
+        "per_ingredient_nutrition": per_ingredient_translated,
+        "total_nutrition": translated_nutrition
+    }
