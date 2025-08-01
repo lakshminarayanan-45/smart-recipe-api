@@ -63,13 +63,14 @@ manual_ingredient_mapping = {
     "turmeric powder": "spices, turmeric, ground",
     "tomatoes": "tomatoes, red, ripe, raw, year round average",
     "salt": "salt, table",
-    "water": None,
+    "water": None,  # Skipped for nutrition
     "coriander leaves": "cilantro, raw",
     "cardamom": "spices, cardamom",
     "cinnamon": "spices, cinnamon",
     "chilli": "spices, chili powder",
     "chili": "spices, chili powder",
     "red chillie powder": "spices, chili powder",
+    # Add more as discovered
 }
 
 def clean_ingredient_name(name):
@@ -78,8 +79,8 @@ def clean_ingredient_name(name):
     name = name.lower().strip()
     name = re.sub(r'[^\w\s]', '', name)
     stop_words = [
-        'powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped', 'sliced',
-        'diced', 'stick', 'pods', 'large', 'for garnishing', 'paste'
+        'powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped',
+        'sliced', 'diced', 'stick', 'pods', 'large', 'for garnishing', 'paste'
     ]
     for sw in stop_words:
         name = name.replace(sw, '')
@@ -94,7 +95,7 @@ def clean_ingredient_name(name):
     return name
 
 def parse_ingredient_line(line):
-    items = [i.strip() for i in re.split(r",|\n", str(line)) if i.strip()]
+    items = [i.strip() for i in re.split(r',|\n', str(line)) if i.strip()]
     result = []
     for item in items:
         match = re.match(r"([\d\.\/]+)?\s*([a-zA-Z]+)?\s(.+)", item)
@@ -186,11 +187,17 @@ def get_nutrition(ingredient, quantity, unit):
 
 def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_override=None):
     sheet_name, lang_col, lang_code, match_df = detect_language_func(recipe_name)
+
     if match_df is None or match_df.empty:
-        raise ValueError(f"Recipe '{recipe_name}' not found.")
+        return {
+            "per_ingredient_nutrition": {},
+            "total_nutrition": {}
+        }
+
     row = match_df.iloc[0]
     if lang_code_override:
         lang_code = lang_code_override
+
     ingredient_col = None
     for col in row.index:
         if 'ingredient' in col.lower() and 'english' in col.lower():
@@ -200,39 +207,39 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
         if 'ingredients_en' in row.index:
             ingredient_col = 'ingredients_en'
         else:
-            return {}
+            return {
+                "per_ingredient_nutrition": {},
+                "total_nutrition": {}
+            }
+
     ingredient_text = str(row[ingredient_col])
     ingredient_lines = [x.strip() for x in re.split(r",|\n", ingredient_text) if x.strip()]
 
     total_nutrition = {}
-    per_ingredient_nutrition = {}  # <--- NEW
+    per_ingredient_nutrition = {}
 
     for line in ingredient_lines:
         parsed = parse_ingredient_line(line)
         if not parsed:
             continue
         p = parsed[0]
-        nut = get_nutrition(p['name'], p['amount'], p['unit'])
+        nut = get_nutrition(p["name"], p["amount"], p["unit"])
+        per_ingredient_nutrition[p["name"]] = {
+            translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}"
+            for k, v in nut.items()
+        }
         for k, v in nut.items():
             total_nutrition[k] = total_nutrition.get(k, 0.0) + v
-        per_ingredient_nutrition[p['name']] = nut   # <--- NEW
 
-    # format for output
     translated_nutrition = {
         translate_nutrient_name(k, lang_code): f"{round(v, 2)} {'kcal' if k == 'Calories' else 'g'}"
         for k, v in total_nutrition.items()
     }
-    per_ingredient_translated = {}
-    for ing, nut_dict in per_ingredient_nutrition.items():
-        per_ingredient_translated[ing] = {
-            translate_nutrient_name(k, lang_code): f"{round(v,2)} {'kcal' if k=='Calories' else 'g'}"
-            for k,v in nut_dict.items()
-        }
 
-    # Output both per-ingredient and total nutrition
-    print(f"[Nutrition] Per-ingredient nutrition: {per_ingredient_translated}")
+    print(f"[Nutrition] Per-ingredient nutrition: {per_ingredient_nutrition}")
     print(f"[Nutrition] Total nutrition for '{recipe_name}': {translated_nutrition}")
+
     return {
-        "per_ingredient_nutrition": per_ingredient_translated,
+        "per_ingredient_nutrition": per_ingredient_nutrition,
         "total_nutrition": translated_nutrition
     }
