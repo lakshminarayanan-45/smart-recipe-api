@@ -9,7 +9,7 @@ FOOD_CSV = os.path.join(DATA_DIR, 'food.csv')
 NUTRIENT_CSV = os.path.join(DATA_DIR, 'nutrient.csv')
 FOOD_NUTRIENT_CSV = os.path.join(DATA_DIR, 'food_nutrient.csv')
 
-# Load USDA datasets once at module load
+# Load USDA datasets once on module load
 food_df = pd.read_csv(FOOD_CSV)
 nutrient_df = pd.read_csv(NUTRIENT_CSV)
 food_nutrient_df = pd.read_csv(FOOD_NUTRIENT_CSV, low_memory=False)
@@ -44,7 +44,7 @@ nutrient_name_translations = {
         'Cholesterol': 'கொலஸ்ட்ரால்', 'Sodium': 'சோடியம்',
         'Calcium': 'கால்சியம்', 'Iron': 'இரும்பு', 'Potassium': 'பொட்டாசியம்'
     },
-    # Add other languages as needed
+    # Additional languages can be added here
 }
 
 manual_ingredient_mapping = {
@@ -63,24 +63,24 @@ manual_ingredient_mapping = {
     "turmeric powder": "spices, turmeric, ground",
     "tomatoes": "tomatoes, red, ripe, raw, year round average",
     "salt": "salt, table",
-    "water": None,  # Skipped for nutrition
+    "water": None,  # Usually zero nutrition
     "coriander leaves": "cilantro, raw",
     "cardamom": "spices, cardamom",
     "cinnamon": "spices, cinnamon",
     "chilli": "spices, chili powder",
     "chili": "spices, chili powder",
     "red chillie powder": "spices, chili powder",
-    # Add more as discovered
+    # Add more mappings as needed
 }
 
 def clean_ingredient_name(name):
     if not name:
         return ""
     name = name.lower().strip()
-    name = re.sub(r'[^\w\s]', '', name)
+    name = re.sub(r'[^\w\s]', '', name)  # Remove punctuation
     stop_words = [
-        'powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped',
-        'sliced', 'diced', 'stick', 'pods', 'large', 'for garnishing', 'paste'
+        'powder', 'fresh', 'pinch', 'to taste', 'optional', 'chopped', 'sliced',
+        'diced', 'stick', 'pods', 'large', 'for garnishing', 'paste'
     ]
     for sw in stop_words:
         name = name.replace(sw, '')
@@ -95,7 +95,7 @@ def clean_ingredient_name(name):
     return name
 
 def parse_ingredient_line(line):
-    items = [i.strip() for i in re.split(r',|\n', str(line)) if i.strip()]
+    items = [i.strip() for i in re.split(r",|\n", str(line)) if i.strip()]
     result = []
     for item in items:
         match = re.match(r"([\d\.\/]+)?\s*([a-zA-Z]+)?\s(.+)", item)
@@ -189,6 +189,7 @@ def get_nutrition_for_recipe(recipe_name, detect_language_func, lang_code_overri
     sheet_name, lang_col, lang_code, match_df = detect_language_func(recipe_name)
 
     if match_df is None or match_df.empty:
+        # Defensive empty return
         return {
             "per_ingredient_nutrition": {},
             "total_nutrition": {}
