@@ -3,36 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Smart Recipe Adjuster</title>
+  <title>🍲 Smart Recipe Adjuster</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background: #fffaf0;
-      padding: 2rem;
-      text-align: center;
-    }
-    input, button {
-      padding: 0.5rem;
-      margin: 0.5rem;
-      font-size: 1rem;
-    }
-    .response {
-      margin-top: 1rem;
-      padding: 1rem;
-      border: 1px solid #ccc;
-      background: #f9f9f9;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
-      text-align: left;
-    }
-    .ingredient, .step, .nutrient {
-      margin-bottom: 0.3rem;
-    }
-    .nutrient-list {
-      margin-top: 0.5rem;
-      padding-left: 1rem;
-    }
+    body { font-family: sans-serif; background: #fffaf0; padding: 2rem; text-align: center; }
+    input, button { padding: 0.5rem; margin: 0.5rem; font-size: 1rem; }
+    .response { margin-top: 1rem; padding: 1rem; border: 1px solid #ccc; background: #f9f9f9;
+                max-width: 700px; margin-left: auto; margin-right: auto; text-align: left; }
+    .section-title { margin-top: 1rem; font-weight: bold; }
+    ul { padding-left: 1.5rem; }
   </style>
 </head>
 <body>
@@ -44,108 +22,103 @@
   <div class="response" id="responseBox" style="display:none">
     <h3 id="recipeTitle"></h3>
     <p><strong>Cooking Time:</strong> <span id="timeInfo"></span></p>
-    <h4>Adjusted Ingredients:</h4>
+
+    <div class="section-title">Adjusted Ingredients:</div>
     <div id="ingredients"></div>
-    <h4>Preparation Steps:</h4>
+
+    <div class="section-title">Preparation Steps:</div>
     <div id="steps"></div>
-    <h4>Nutrition Information:</h4>
+
+    <div class="section-title">Nutrition Information:</div>
     <div id="nutrition"></div>
   </div>
 
   <script>
     const API_KEY = "queenbee@987";
-    const adjustBtn = document.getElementById("adjustBtn");
-    const responseBox = document.getElementById("responseBox");
+    const BASE_URL = "https://smart-recipe-api-ff12.onrender.com";
+    const scaleUrl = `${BASE_URL}/scale_recipe`;
+    const nutritionUrl = `${BASE_URL}/nutrition_info`;
 
-    adjustBtn.addEventListener("click", async () => {
+    document.getElementById("adjustBtn").addEventListener("click", async () => {
       const recipe = document.getElementById("recipeName").value.trim();
       const servings = document.getElementById("servings").value.trim();
-
       if (!recipe || !servings) {
         alert("Please enter both recipe name and number of servings.");
         return;
       }
 
-      // Your backend API URLs
-      const scaleUrl = "https://smart-recipe-api-ff12.onrender.com/scale_recipe";
-      const nutritionUrl = "https://smart-recipe-api-ff12.onrender.com/nutrition_info";
-
       try {
-        // 1. Fetch scaled recipe data
+        // 1. Get scaled recipe
         const scaleRes = await fetch(scaleUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-KEY": API_KEY
-          },
-          body: JSON.stringify({
-            recipe_name: recipe,
-            new_servings: parseInt(servings, 10)
-          })
+          headers: { "Content-Type": "application/json", "X-API-KEY": API_KEY },
+          body: JSON.stringify({ recipe_name: recipe, new_servings: parseInt(servings, 10) })
         });
-
         const scaleData = await scaleRes.json();
+        if (!scaleRes.ok) throw new Error(scaleData.error || "Scaling failed");
 
-        if (!scaleRes.ok) throw new Error(scaleData.error || "Error fetching scaled recipe");
-
-        // 2. Fetch nutrition info
-        // Pass recipe name, optionally lang_code if needed (here defaulting to English)
+        // 2. Get nutrition info
         const nutritionRes = await fetch(nutritionUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-KEY": API_KEY
-          },
-          body: JSON.stringify({
-            recipe_name: recipe,
-            // lang_code: "en"  // optionally add language code here if your backend supports it
-          })
+          headers: { "Content-Type": "application/json", "X-API-KEY": API_KEY },
+          body: JSON.stringify({ recipe_name: recipe })
         });
-
         const nutritionData = await nutritionRes.json();
+        if (!nutritionRes.ok) throw new Error(nutritionData.error || "Nutrition fetch failed");
 
-        if (!nutritionRes.ok) throw new Error(nutritionData.error || "Error fetching nutrition info");
-
-        // Show the response container
+        // ===== Populate UI =====
+        const responseBox = document.getElementById("responseBox");
         responseBox.style.display = "block";
 
-        // Populate UI with scaled recipe info
+        // Title and cooking time
         document.getElementById("recipeTitle").innerText = `${scaleData.recipe} (for ${scaleData.new_servings} servings)`;
         document.getElementById("timeInfo").innerText = `${scaleData.original_time} ➡ ${scaleData.adjusted_time}`;
 
         // Ingredients
         const ingredientsDiv = document.getElementById("ingredients");
-        ingredientsDiv.innerHTML = "";
-        scaleData.ingredients.forEach(i => {
-          const amt = i.formattedAmount ? i.formattedAmount + " " : "";
-          const unit = i.unit ? i.unit + " " : "";
-          ingredientsDiv.innerHTML += `<div class="ingredient">- ${amt}${unit}${i.name}</div>`;
-        });
+        ingredientsDiv.innerHTML = scaleData.ingredients.map(i =>
+          `- ${i.formattedAmount || ''} ${i.unit || ''} ${i.name}`
+        ).join("<br>");
 
         // Steps
         const stepsDiv = document.getElementById("steps");
-        stepsDiv.innerHTML = "";
-        scaleData.steps.forEach((step, idx) => {
-          stepsDiv.innerHTML += `<div class="step">${idx + 1}. ${step}</div>`;
-        });
+        stepsDiv.innerHTML = scaleData.steps.map((step, idx) =>
+          `${idx+1}. ${step}`
+        ).join("<br>");
 
         // Nutrition
         const nutritionDiv = document.getElementById("nutrition");
-        nutritionDiv.innerHTML = "";  // Clear previous
+        nutritionDiv.innerHTML = "";
 
-        if (nutritionData.nutrition && Object.keys(nutritionData.nutrition).length > 0) {
-          nutritionDiv.innerHTML = '<ul class="nutrient-list">';
-          for (const [nutrient, value] of Object.entries(nutritionData.nutrition)) {
-            nutritionDiv.innerHTML += `<li class="nutrient"><strong>${nutrient}:</strong> ${value}</li>`;
+        // Total Nutrition
+        if (nutritionData.total_nutrition && Object.keys(nutritionData.total_nutrition).length > 0) {
+          nutritionDiv.innerHTML += "<strong>Total Nutrition:</strong><ul>";
+          for (const [nutrient, value] of Object.entries(nutritionData.total_nutrition)) {
+            nutritionDiv.innerHTML += `<li>${nutrient}: ${value}</li>`;
           }
-          nutritionDiv.innerHTML += '</ul>';
-        } else {
+          nutritionDiv.innerHTML += "</ul>";
+        }
+
+        // Per Ingredient Nutrition
+        if (nutritionData.per_ingredient_nutrition && Object.keys(nutritionData.per_ingredient_nutrition).length > 0) {
+          nutritionDiv.innerHTML += "<strong>Per Ingredient Nutrition:</strong>";
+          for (const [ingredient, nutrients] of Object.entries(nutritionData.per_ingredient_nutrition)) {
+            nutritionDiv.innerHTML += `<p><em>${ingredient}</em></p><ul>`;
+            for (const [nutrient, value] of Object.entries(nutrients)) {
+              nutritionDiv.innerHTML += `<li>${nutrient}: ${value}</li>`;
+            }
+            nutritionDiv.innerHTML += "</ul>";
+          }
+        }
+
+        if ((!nutritionData.total_nutrition || Object.keys(nutritionData.total_nutrition).length === 0) &&
+            (!nutritionData.per_ingredient_nutrition || Object.keys(nutritionData.per_ingredient_nutrition).length === 0)) {
           nutritionDiv.innerHTML = "<p>No nutrition information available.</p>";
         }
 
-      } catch (error) {
-        alert("❌ " + error.message);
-        responseBox.style.display = "none";
+      } catch (err) {
+        alert("❌ " + err.message);
+        document.getElementById("responseBox").style.display = "none";
       }
     });
   </script>
